@@ -1,0 +1,1737 @@
+{
+  "model": "VAULTLM-150M",
+  "total_params": 160614112,
+  "latest_step": 64325,
+  "tokens_pushed": 263475200,
+  "best_val_ppl": 2.1,
+  "source_counts": {
+    "fineweb_edu": 82569,
+    "hf_multilang_code": 82409,
+    "buildbit_c_cpp_lua": 66610,
+    "smoltalk": 29725,
+    "code_python": 19796,
+    "reasoning_think": 50004
+  },
+  "history": [
+    {
+      "step": 61850,
+      "tokens_pushed": 253337600,
+      "train_loss": 1.7216,
+      "val_loss": 0.7529,
+      "val_ppl": 2.12,
+      "lr": 0.00013348146265908538,
+      "tok_per_sec": 4554.4,
+      "source_counts": {
+        "fineweb_edu": 76204,
+        "hf_multilang_code": 76145,
+        "buildbit_c_cpp_lua": 61467,
+        "smoltalk": 27479,
+        "code_python": 18207,
+        "reasoning_think": 46173
+      }
+    },
+    {
+      "step": 61875,
+      "tokens_pushed": 253440000,
+      "train_loss": 2.4963,
+      "val_loss": 0.7534,
+      "val_ppl": 2.12,
+      "lr": 0.00013346881917492847,
+      "tok_per_sec": 4554.6,
+      "source_counts": {
+        "fineweb_edu": 76265,
+        "hf_multilang_code": 76195,
+        "buildbit_c_cpp_lua": 61517,
+        "smoltalk": 27506,
+        "code_python": 18226,
+        "reasoning_think": 46208
+      },
+      "sample_generation": "### User:\nWrite a BuildBit (.bb) function that defines `soa struct Star` and updates positions in parallel.\n\n### Assistant:\n<think>\nWe use `arena mem = 4194304`, `alloc(mem, f32, 262144)`, and `parallel for i in 0.."
+    },
+    {
+      "step": 61900,
+      "tokens_pushed": 253542400,
+      "train_loss": 0.9333,
+      "val_loss": 0.7543,
+      "val_ppl": 2.13,
+      "lr": 0.00013345617170962184,
+      "tok_per_sec": 4554.2,
+      "source_counts": {
+        "fineweb_edu": 76317,
+        "hf_multilang_code": 76262,
+        "buildbit_c_cpp_lua": 61567,
+        "smoltalk": 27525,
+        "code_python": 18241,
+        "reasoning_think": 46253
+      }
+    },
+    {
+      "step": 61925,
+      "tokens_pushed": 253644800,
+      "train_loss": 1.5672,
+      "val_loss": 0.7589,
+      "val_ppl": 2.14,
+      "lr": 0.00013344352026447437,
+      "tok_per_sec": 4554.4,
+      "source_counts": {
+        "fineweb_edu": 76380,
+        "hf_multilang_code": 76321,
+        "buildbit_c_cpp_lua": 61608,
+        "smoltalk": 27541,
+        "code_python": 18253,
+        "reasoning_think": 46301
+      }
+    },
+    {
+      "step": 61950,
+      "tokens_pushed": 253747200,
+      "train_loss": 1.0843,
+      "val_loss": 0.7583,
+      "val_ppl": 2.13,
+      "lr": 0.00013343086484079536,
+      "tok_per_sec": 4554.6,
+      "source_counts": {
+        "fineweb_edu": 76428,
+        "hf_multilang_code": 76384,
+        "buildbit_c_cpp_lua": 61671,
+        "smoltalk": 27558,
+        "code_python": 18266,
+        "reasoning_think": 46330
+      }
+    },
+    {
+      "step": 61975,
+      "tokens_pushed": 253849600,
+      "train_loss": 1.5316,
+      "val_loss": 0.7541,
+      "val_ppl": 2.13,
+      "lr": 0.00013341820543989456,
+      "tok_per_sec": 4554.8,
+      "source_counts": {
+        "fineweb_edu": 76497,
+        "hf_multilang_code": 76443,
+        "buildbit_c_cpp_lua": 61707,
+        "smoltalk": 27579,
+        "code_python": 18285,
+        "reasoning_think": 46364
+      }
+    },
+    {
+      "step": 62000,
+      "tokens_pushed": 253952000,
+      "train_loss": 1.7666,
+      "val_loss": 0.7535,
+      "val_ppl": 2.12,
+      "lr": 0.00013340554206308207,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 76557,
+        "hf_multilang_code": 76508,
+        "buildbit_c_cpp_lua": 61747,
+        "smoltalk": 27598,
+        "code_python": 18296,
+        "reasoning_think": 46410
+      },
+      "sample_generation": "### User:\nWrite a C function that counts the number of vowels in a null-terminated string.\n\n### Assistant:\n<think>\nWe iterate through the `const char *s` pointer until `'\\0'`, convert each character to lowercase with bitwise `(c | 32)`, and increment the counter on `'a'`,"
+    },
+    {
+      "step": 62025,
+      "tokens_pushed": 254054400,
+      "train_loss": 1.7333,
+      "val_loss": 0.7541,
+      "val_ppl": 2.13,
+      "lr": 0.00013339287471166844,
+      "tok_per_sec": 4554.0,
+      "source_counts": {
+        "fineweb_edu": 76609,
+        "hf_multilang_code": 76566,
+        "buildbit_c_cpp_lua": 61800,
+        "smoltalk": 27620,
+        "code_python": 18308,
+        "reasoning_think": 46446
+      }
+    },
+    {
+      "step": 62050,
+      "tokens_pushed": 254156800,
+      "train_loss": 2.224,
+      "val_loss": 0.7514,
+      "val_ppl": 2.12,
+      "lr": 0.00013338020338696458,
+      "tok_per_sec": 4554.2,
+      "source_counts": {
+        "fineweb_edu": 76667,
+        "hf_multilang_code": 76623,
+        "buildbit_c_cpp_lua": 61855,
+        "smoltalk": 27636,
+        "code_python": 18323,
+        "reasoning_think": 46487
+      }
+    },
+    {
+      "step": 62075,
+      "tokens_pushed": 254259200,
+      "train_loss": 1.8684,
+      "val_loss": 0.7544,
+      "val_ppl": 2.13,
+      "lr": 0.00013336752809028188,
+      "tok_per_sec": 4554.4,
+      "source_counts": {
+        "fineweb_edu": 76736,
+        "hf_multilang_code": 76680,
+        "buildbit_c_cpp_lua": 61916,
+        "smoltalk": 27649,
+        "code_python": 18336,
+        "reasoning_think": 46528
+      }
+    },
+    {
+      "step": 62100,
+      "tokens_pushed": 254361600,
+      "train_loss": 1.536,
+      "val_loss": 0.7544,
+      "val_ppl": 2.13,
+      "lr": 0.0001333548488229321,
+      "tok_per_sec": 4554.6,
+      "source_counts": {
+        "fineweb_edu": 76788,
+        "hf_multilang_code": 76741,
+        "buildbit_c_cpp_lua": 61977,
+        "smoltalk": 27668,
+        "code_python": 18348,
+        "reasoning_think": 46559
+      }
+    },
+    {
+      "step": 62125,
+      "tokens_pushed": 254464000,
+      "train_loss": 1.8369,
+      "val_loss": 0.7575,
+      "val_ppl": 2.13,
+      "lr": 0.00013334216558622743,
+      "tok_per_sec": 4554.7,
+      "source_counts": {
+        "fineweb_edu": 76844,
+        "hf_multilang_code": 76798,
+        "buildbit_c_cpp_lua": 62029,
+        "smoltalk": 27690,
+        "code_python": 18359,
+        "reasoning_think": 46596
+      },
+      "sample_generation": "### User:\nWrite a Lua module implementing a `Point` class using metatables.\n\n### Assistant:\n<think>\nIn Lua, we define `local Vec2 = {}`, set `Vec2.__index = Vec2`, and use `setmetatable` in `Vec2.new`.\n</think>\n"
+    },
+    {
+      "step": 62150,
+      "tokens_pushed": 254566400,
+      "train_loss": 2.1052,
+      "val_loss": 0.758,
+      "val_ppl": 2.13,
+      "lr": 0.00013332947838148046,
+      "tok_per_sec": 4554.4,
+      "source_counts": {
+        "fineweb_edu": 76908,
+        "hf_multilang_code": 76858,
+        "buildbit_c_cpp_lua": 62067,
+        "smoltalk": 27717,
+        "code_python": 18369,
+        "reasoning_think": 46628
+      }
+    },
+    {
+      "step": 62175,
+      "tokens_pushed": 254668800,
+      "train_loss": 1.6717,
+      "val_loss": 0.7527,
+      "val_ppl": 2.12,
+      "lr": 0.0001333167872100042,
+      "tok_per_sec": 4554.6,
+      "source_counts": {
+        "fineweb_edu": 76974,
+        "hf_multilang_code": 76909,
+        "buildbit_c_cpp_lua": 62112,
+        "smoltalk": 27743,
+        "code_python": 18389,
+        "reasoning_think": 46658
+      }
+    },
+    {
+      "step": 62200,
+      "tokens_pushed": 254771200,
+      "train_loss": 1.7881,
+      "val_loss": 0.7549,
+      "val_ppl": 2.13,
+      "lr": 0.00013330409207311204,
+      "tok_per_sec": 4554.8,
+      "source_counts": {
+        "fineweb_edu": 77043,
+        "hf_multilang_code": 76968,
+        "buildbit_c_cpp_lua": 62160,
+        "smoltalk": 27761,
+        "code_python": 18406,
+        "reasoning_think": 46695
+      }
+    },
+    {
+      "step": 62225,
+      "tokens_pushed": 254873600,
+      "train_loss": 1.4462,
+      "val_loss": 0.7513,
+      "val_ppl": 2.12,
+      "lr": 0.00013329139297211783,
+      "tok_per_sec": 4554.5,
+      "source_counts": {
+        "fineweb_edu": 77109,
+        "hf_multilang_code": 77026,
+        "buildbit_c_cpp_lua": 62208,
+        "smoltalk": 27788,
+        "code_python": 18416,
+        "reasoning_think": 46732
+      }
+    },
+    {
+      "step": 62250,
+      "tokens_pushed": 254976000,
+      "train_loss": 1.1856,
+      "val_loss": 0.7574,
+      "val_ppl": 2.13,
+      "lr": 0.00013327868990833578,
+      "tok_per_sec": 4554.7,
+      "source_counts": {
+        "fineweb_edu": 77191,
+        "hf_multilang_code": 77112,
+        "buildbit_c_cpp_lua": 62282,
+        "smoltalk": 27815,
+        "code_python": 18436,
+        "reasoning_think": 46779
+      },
+      "sample_generation": "### User:\nIf a train travels at 60 miles per hour for 3 hours, how far does it travel in total?\n\n### Assistant:\n<think>\nDistance equals speed multiplied by time:\nDistance = 60 mph * 3 hours = 180 miles.\n</think>\nThe train travels **180 miles** in 3 hours."
+    },
+    {
+      "step": 62275,
+      "tokens_pushed": 255078400,
+      "train_loss": 1.1491,
+      "val_loss": 0.755,
+      "val_ppl": 2.13,
+      "lr": 0.00013326598288308057,
+      "tok_per_sec": 4554.3,
+      "source_counts": {
+        "fineweb_edu": 77275,
+        "hf_multilang_code": 77208,
+        "buildbit_c_cpp_lua": 62348,
+        "smoltalk": 27848,
+        "code_python": 18453,
+        "reasoning_think": 46819
+      }
+    },
+    {
+      "step": 62300,
+      "tokens_pushed": 255180800,
+      "train_loss": 1.3156,
+      "val_loss": 0.7579,
+      "val_ppl": 2.13,
+      "lr": 0.0001332532718976672,
+      "tok_per_sec": 4554.5,
+      "source_counts": {
+        "fineweb_edu": 77359,
+        "hf_multilang_code": 77277,
+        "buildbit_c_cpp_lua": 62407,
+        "smoltalk": 27884,
+        "code_python": 18474,
+        "reasoning_think": 46864
+      }
+    },
+    {
+      "step": 62325,
+      "tokens_pushed": 255283200,
+      "train_loss": 1.3862,
+      "val_loss": 0.7586,
+      "val_ppl": 2.14,
+      "lr": 0.00013324055695341117,
+      "tok_per_sec": 4554.7,
+      "source_counts": {
+        "fineweb_edu": 77437,
+        "hf_multilang_code": 77358,
+        "buildbit_c_cpp_lua": 62477,
+        "smoltalk": 27910,
+        "code_python": 18495,
+        "reasoning_think": 46913
+      }
+    },
+    {
+      "step": 62350,
+      "tokens_pushed": 255385600,
+      "train_loss": 1.6586,
+      "val_loss": 0.7602,
+      "val_ppl": 2.14,
+      "lr": 0.00013322783805162834,
+      "tok_per_sec": 4554.9,
+      "source_counts": {
+        "fineweb_edu": 77515,
+        "hf_multilang_code": 77428,
+        "buildbit_c_cpp_lua": 62544,
+        "smoltalk": 27942,
+        "code_python": 18520,
+        "reasoning_think": 46963
+      }
+    },
+    {
+      "step": 62375,
+      "tokens_pushed": 255488000,
+      "train_loss": 1.687,
+      "val_loss": 0.7593,
+      "val_ppl": 2.14,
+      "lr": 0.00013321511519363502,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 77584,
+        "hf_multilang_code": 77497,
+        "buildbit_c_cpp_lua": 62616,
+        "smoltalk": 27975,
+        "code_python": 18545,
+        "reasoning_think": 47009
+      },
+      "sample_generation": "### User:\n[python] Write a function to check if a string is a palindrome.\n\n### Assistant:\n<think>\nLet's solve this coding problem step by step.\n</think>\ndef is_palindrome(input_string):\n return str(input_string) == input_string"
+    },
+    {
+      "step": 62400,
+      "tokens_pushed": 255590400,
+      "train_loss": 1.1094,
+      "val_loss": 0.7663,
+      "val_ppl": 2.15,
+      "lr": 0.00013320238838074785,
+      "tok_per_sec": 4554.8,
+      "source_counts": {
+        "fineweb_edu": 77657,
+        "hf_multilang_code": 77575,
+        "buildbit_c_cpp_lua": 62692,
+        "smoltalk": 27997,
+        "code_python": 18563,
+        "reasoning_think": 47049
+      }
+    },
+    {
+      "step": 62425,
+      "tokens_pushed": 255692800,
+      "train_loss": 1.1656,
+      "val_loss": 0.7565,
+      "val_ppl": 2.13,
+      "lr": 0.00013318965761428402,
+      "tok_per_sec": 4554.5,
+      "source_counts": {
+        "fineweb_edu": 77738,
+        "hf_multilang_code": 77660,
+        "buildbit_c_cpp_lua": 62765,
+        "smoltalk": 28025,
+        "code_python": 18590,
+        "reasoning_think": 47093
+      }
+    },
+    {
+      "step": 62450,
+      "tokens_pushed": 255795200,
+      "train_loss": 1.7718,
+      "val_loss": 0.7605,
+      "val_ppl": 2.14,
+      "lr": 0.00013317692289556093,
+      "tok_per_sec": 4554.7,
+      "source_counts": {
+        "fineweb_edu": 77805,
+        "hf_multilang_code": 77735,
+        "buildbit_c_cpp_lua": 62827,
+        "smoltalk": 28069,
+        "code_python": 18618,
+        "reasoning_think": 47127
+      }
+    },
+    {
+      "step": 62475,
+      "tokens_pushed": 255897600,
+      "train_loss": 1.2136,
+      "val_loss": 0.7602,
+      "val_ppl": 2.14,
+      "lr": 0.0001331641842258966,
+      "tok_per_sec": 4554.8,
+      "source_counts": {
+        "fineweb_edu": 77894,
+        "hf_multilang_code": 77811,
+        "buildbit_c_cpp_lua": 62887,
+        "smoltalk": 28094,
+        "code_python": 18638,
+        "reasoning_think": 47169
+      }
+    },
+    {
+      "step": 62500,
+      "tokens_pushed": 256000000,
+      "train_loss": 1.4003,
+      "val_loss": 0.7574,
+      "val_ppl": 2.13,
+      "lr": 0.00013315144160660927,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 77984,
+        "hf_multilang_code": 77905,
+        "buildbit_c_cpp_lua": 62959,
+        "smoltalk": 28116,
+        "code_python": 18656,
+        "reasoning_think": 47217
+      },
+      "sample_generation": "### User:\nWrite a BuildBit (.bb) function that defines `soa struct Star` and updates positions in parallel.\n\n### Assistant:\n<think>\nWe use `soa struct VoxelNode` for 64-byte SIMD alignment, allocate 262144 items in `gpu_arena vram = 41943"
+    },
+    {
+      "step": 62525,
+      "tokens_pushed": 256102400,
+      "train_loss": 1.9731,
+      "val_loss": 0.758,
+      "val_ppl": 2.13,
+      "lr": 0.00013313869503901775,
+      "tok_per_sec": 4554.7,
+      "source_counts": {
+        "fineweb_edu": 78070,
+        "hf_multilang_code": 77982,
+        "buildbit_c_cpp_lua": 63018,
+        "smoltalk": 28139,
+        "code_python": 18675,
+        "reasoning_think": 47268
+      }
+    },
+    {
+      "step": 62550,
+      "tokens_pushed": 256204800,
+      "train_loss": 1.0357,
+      "val_loss": 0.7552,
+      "val_ppl": 2.13,
+      "lr": 0.00013312594452444113,
+      "tok_per_sec": 4554.9,
+      "source_counts": {
+        "fineweb_edu": 78139,
+        "hf_multilang_code": 78048,
+        "buildbit_c_cpp_lua": 63084,
+        "smoltalk": 28171,
+        "code_python": 18697,
+        "reasoning_think": 47315
+      }
+    },
+    {
+      "step": 62575,
+      "tokens_pushed": 256307200,
+      "train_loss": 1.5597,
+      "val_loss": 0.7508,
+      "val_ppl": 2.12,
+      "lr": 0.000133113190064199,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 78215,
+        "hf_multilang_code": 78120,
+        "buildbit_c_cpp_lua": 63157,
+        "smoltalk": 28203,
+        "code_python": 18712,
+        "reasoning_think": 47368
+      }
+    },
+    {
+      "step": 62600,
+      "tokens_pushed": 256409600,
+      "train_loss": 2.0427,
+      "val_loss": 0.7509,
+      "val_ppl": 2.12,
+      "lr": 0.00013310043165961133,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 78282,
+        "hf_multilang_code": 78204,
+        "buildbit_c_cpp_lua": 63232,
+        "smoltalk": 28228,
+        "code_python": 18734,
+        "reasoning_think": 47415
+      }
+    },
+    {
+      "step": 62625,
+      "tokens_pushed": 256512000,
+      "train_loss": 1.7212,
+      "val_loss": 0.7506,
+      "val_ppl": 2.12,
+      "lr": 0.00013308766931199845,
+      "tok_per_sec": 4554.9,
+      "source_counts": {
+        "fineweb_edu": 78365,
+        "hf_multilang_code": 78265,
+        "buildbit_c_cpp_lua": 63302,
+        "smoltalk": 28245,
+        "code_python": 18750,
+        "reasoning_think": 47465
+      },
+      "sample_generation": "### User:\nWrite a C function that counts the number of vowels in a null-terminated string.\n\n### Assistant:\n<think>\nWe iterate through the `const char *s` pointer until `'\\0'`, convert each character to lowercase with bitwise `(c | 32)`, and increment the counter on `'a'`,"
+    },
+    {
+      "step": 62650,
+      "tokens_pushed": 256614400,
+      "train_loss": 1.484,
+      "val_loss": 0.7504,
+      "val_ppl": 2.12,
+      "lr": 0.0001330749030226812,
+      "tok_per_sec": 4554.6,
+      "source_counts": {
+        "fineweb_edu": 78442,
+        "hf_multilang_code": 78355,
+        "buildbit_c_cpp_lua": 63364,
+        "smoltalk": 28279,
+        "code_python": 18766,
+        "reasoning_think": 47523
+      }
+    },
+    {
+      "step": 62675,
+      "tokens_pushed": 256716800,
+      "train_loss": 1.8203,
+      "val_loss": 0.7531,
+      "val_ppl": 2.12,
+      "lr": 0.0001330621327929807,
+      "tok_per_sec": 4554.8,
+      "source_counts": {
+        "fineweb_edu": 78523,
+        "hf_multilang_code": 78428,
+        "buildbit_c_cpp_lua": 63433,
+        "smoltalk": 28312,
+        "code_python": 18779,
+        "reasoning_think": 47573
+      }
+    },
+    {
+      "step": 62700,
+      "tokens_pushed": 256819200,
+      "train_loss": 1.4482,
+      "val_loss": 0.7552,
+      "val_ppl": 2.13,
+      "lr": 0.00013304935862421858,
+      "tok_per_sec": 4554.9,
+      "source_counts": {
+        "fineweb_edu": 78577,
+        "hf_multilang_code": 78490,
+        "buildbit_c_cpp_lua": 63488,
+        "smoltalk": 28334,
+        "code_python": 18797,
+        "reasoning_think": 47601
+      }
+    },
+    {
+      "step": 62725,
+      "tokens_pushed": 256921600,
+      "train_loss": 1.7515,
+      "val_loss": 0.7524,
+      "val_ppl": 2.12,
+      "lr": 0.00013303658051771686,
+      "tok_per_sec": 4555.1,
+      "source_counts": {
+        "fineweb_edu": 78640,
+        "hf_multilang_code": 78544,
+        "buildbit_c_cpp_lua": 63539,
+        "smoltalk": 28351,
+        "code_python": 18812,
+        "reasoning_think": 47635
+      }
+    },
+    {
+      "step": 62750,
+      "tokens_pushed": 257024000,
+      "train_loss": 1.6104,
+      "val_loss": 0.7573,
+      "val_ppl": 2.13,
+      "lr": 0.0001330237984747979,
+      "tok_per_sec": 4555.3,
+      "source_counts": {
+        "fineweb_edu": 78695,
+        "hf_multilang_code": 78607,
+        "buildbit_c_cpp_lua": 63578,
+        "smoltalk": 28378,
+        "code_python": 18824,
+        "reasoning_think": 47678
+      },
+      "sample_generation": "### User:\nWrite a Lua module implementing a `Point` class using metatables.\n\n### Assistant:\n<think>\nIn Lua, we define `local Vec2 = {}`, set `Vec2.__index = Vec2`, and use `setmetatable` in `Vec2.new`.\n</think>\n"
+    },
+    {
+      "step": 62775,
+      "tokens_pushed": 257126400,
+      "train_loss": 1.6612,
+      "val_loss": 0.7545,
+      "val_ppl": 2.13,
+      "lr": 0.00013301101249678458,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 78758,
+        "hf_multilang_code": 78660,
+        "buildbit_c_cpp_lua": 63625,
+        "smoltalk": 28397,
+        "code_python": 18838,
+        "reasoning_think": 47714
+      }
+    },
+    {
+      "step": 62800,
+      "tokens_pushed": 257228800,
+      "train_loss": 1.5511,
+      "val_loss": 0.7515,
+      "val_ppl": 2.12,
+      "lr": 0.00013299822258500008,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 78820,
+        "hf_multilang_code": 78719,
+        "buildbit_c_cpp_lua": 63666,
+        "smoltalk": 28416,
+        "code_python": 18852,
+        "reasoning_think": 47752
+      }
+    },
+    {
+      "step": 62825,
+      "tokens_pushed": 257331200,
+      "train_loss": 1.9809,
+      "val_loss": 0.754,
+      "val_ppl": 2.13,
+      "lr": 0.00013298542874076803,
+      "tok_per_sec": 4554.9,
+      "source_counts": {
+        "fineweb_edu": 78886,
+        "hf_multilang_code": 78775,
+        "buildbit_c_cpp_lua": 63709,
+        "smoltalk": 28432,
+        "code_python": 18869,
+        "reasoning_think": 47786
+      }
+    },
+    {
+      "step": 62850,
+      "tokens_pushed": 257433600,
+      "train_loss": 1.9534,
+      "val_loss": 0.7542,
+      "val_ppl": 2.13,
+      "lr": 0.0001329726309654125,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 78939,
+        "hf_multilang_code": 78833,
+        "buildbit_c_cpp_lua": 63752,
+        "smoltalk": 28458,
+        "code_python": 18885,
+        "reasoning_think": 47814
+      }
+    },
+    {
+      "step": 62875,
+      "tokens_pushed": 257536000,
+      "train_loss": 1.7035,
+      "val_loss": 0.7507,
+      "val_ppl": 2.12,
+      "lr": 0.00013295982926025789,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 78996,
+        "hf_multilang_code": 78882,
+        "buildbit_c_cpp_lua": 63801,
+        "smoltalk": 28480,
+        "code_python": 18902,
+        "reasoning_think": 47858
+      },
+      "sample_generation": "### User:\nIf a train travels at 60 miles per hour for 3 hours, how far does it travel in total?\n\n### Assistant:\n<think>\nDistance equals speed multiplied by time:\nDistance = 60 mph * 3 hours = 120 miles.\n</think>\nThe train travels **120 miles** in 3 hours."
+    },
+    {
+      "step": 62900,
+      "tokens_pushed": 257638400,
+      "train_loss": 1.7833,
+      "val_loss": 0.7527,
+      "val_ppl": 2.12,
+      "lr": 0.00013294702362662912,
+      "tok_per_sec": 4554.9,
+      "source_counts": {
+        "fineweb_edu": 79054,
+        "hf_multilang_code": 78955,
+        "buildbit_c_cpp_lua": 63848,
+        "smoltalk": 28500,
+        "code_python": 18914,
+        "reasoning_think": 47891
+      }
+    },
+    {
+      "step": 62925,
+      "tokens_pushed": 257740800,
+      "train_loss": 1.513,
+      "val_loss": 0.7535,
+      "val_ppl": 2.12,
+      "lr": 0.0001329342140658514,
+      "tok_per_sec": 4555.1,
+      "source_counts": {
+        "fineweb_edu": 79105,
+        "hf_multilang_code": 79013,
+        "buildbit_c_cpp_lua": 63903,
+        "smoltalk": 28524,
+        "code_python": 18924,
+        "reasoning_think": 47932
+      }
+    },
+    {
+      "step": 62950,
+      "tokens_pushed": 257843200,
+      "train_loss": 1.8224,
+      "val_loss": 0.7557,
+      "val_ppl": 2.13,
+      "lr": 0.00013292140057925036,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 79151,
+        "hf_multilang_code": 79076,
+        "buildbit_c_cpp_lua": 63957,
+        "smoltalk": 28554,
+        "code_python": 18933,
+        "reasoning_think": 47967
+      }
+    },
+    {
+      "step": 62975,
+      "tokens_pushed": 257945600,
+      "train_loss": 1.5277,
+      "val_loss": 0.7523,
+      "val_ppl": 2.12,
+      "lr": 0.00013290858316815216,
+      "tok_per_sec": 4555.4,
+      "source_counts": {
+        "fineweb_edu": 79206,
+        "hf_multilang_code": 79139,
+        "buildbit_c_cpp_lua": 64010,
+        "smoltalk": 28572,
+        "code_python": 18958,
+        "reasoning_think": 48007
+      }
+    },
+    {
+      "step": 63000,
+      "tokens_pushed": 258048000,
+      "train_loss": 1.5284,
+      "val_loss": 0.7538,
+      "val_ppl": 2.13,
+      "lr": 0.00013289576183388323,
+      "tok_per_sec": 4555.6,
+      "source_counts": {
+        "fineweb_edu": 79272,
+        "hf_multilang_code": 79206,
+        "buildbit_c_cpp_lua": 64052,
+        "smoltalk": 28590,
+        "code_python": 18975,
+        "reasoning_think": 48026
+      },
+      "sample_generation": "### User:\n[python] Write a function to check if a string is a palindrome.\n\n### Assistant:\n<think>\nLet's design a clean, optimal python implementation.\n</think>\n```python\ndef is_palindrome(s: str) -> bool:\n    return s == s[::-1]\n```"
+    },
+    {
+      "step": 63025,
+      "tokens_pushed": 258150400,
+      "train_loss": 1.6,
+      "val_loss": 0.7562,
+      "val_ppl": 2.13,
+      "lr": 0.00013288293657777044,
+      "tok_per_sec": 4554.5,
+      "source_counts": {
+        "fineweb_edu": 79326,
+        "hf_multilang_code": 79266,
+        "buildbit_c_cpp_lua": 64095,
+        "smoltalk": 28605,
+        "code_python": 18995,
+        "reasoning_think": 48069
+      }
+    },
+    {
+      "step": 63050,
+      "tokens_pushed": 258252800,
+      "train_loss": 2.1429,
+      "val_loss": 0.757,
+      "val_ppl": 2.13,
+      "lr": 0.00013287010740114112,
+      "tok_per_sec": 4554.7,
+      "source_counts": {
+        "fineweb_edu": 79403,
+        "hf_multilang_code": 79315,
+        "buildbit_c_cpp_lua": 64131,
+        "smoltalk": 28625,
+        "code_python": 19008,
+        "reasoning_think": 48099
+      }
+    },
+    {
+      "step": 63075,
+      "tokens_pushed": 258355200,
+      "train_loss": 2.5625,
+      "val_loss": 0.7558,
+      "val_ppl": 2.13,
+      "lr": 0.00013285727430532293,
+      "tok_per_sec": 4554.9,
+      "source_counts": {
+        "fineweb_edu": 79461,
+        "hf_multilang_code": 79372,
+        "buildbit_c_cpp_lua": 64178,
+        "smoltalk": 28640,
+        "code_python": 19024,
+        "reasoning_think": 48138
+      }
+    },
+    {
+      "step": 63100,
+      "tokens_pushed": 258457600,
+      "train_loss": 2.0076,
+      "val_loss": 0.7548,
+      "val_ppl": 2.13,
+      "lr": 0.00013284443729164397,
+      "tok_per_sec": 4555.1,
+      "source_counts": {
+        "fineweb_edu": 79528,
+        "hf_multilang_code": 79422,
+        "buildbit_c_cpp_lua": 64231,
+        "smoltalk": 28658,
+        "code_python": 19036,
+        "reasoning_think": 48169
+      }
+    },
+    {
+      "step": 63125,
+      "tokens_pushed": 258560000,
+      "train_loss": 3.0799,
+      "val_loss": 0.755,
+      "val_ppl": 2.13,
+      "lr": 0.00013283159636143276,
+      "tok_per_sec": 4555.3,
+      "source_counts": {
+        "fineweb_edu": 79588,
+        "hf_multilang_code": 79490,
+        "buildbit_c_cpp_lua": 64267,
+        "smoltalk": 28672,
+        "code_python": 19058,
+        "reasoning_think": 48214
+      },
+      "sample_generation": "### User:\nWrite a BuildBit (.bb) function that defines `soa struct Star` and updates positions in parallel.\n\n### Assistant:\n<think>\nIn BuildBit (`bbc`), we declare `soa struct VoxelNode` for 64-byte SIMD alignment, allocate 1000000 items in `gpu_arena"
+    },
+    {
+      "step": 63150,
+      "tokens_pushed": 258662400,
+      "train_loss": 3.314,
+      "val_loss": 0.7554,
+      "val_ppl": 2.13,
+      "lr": 0.00013281875151601824,
+      "tok_per_sec": 4554.9,
+      "source_counts": {
+        "fineweb_edu": 79662,
+        "hf_multilang_code": 79552,
+        "buildbit_c_cpp_lua": 64311,
+        "smoltalk": 28687,
+        "code_python": 19066,
+        "reasoning_think": 48250
+      }
+    },
+    {
+      "step": 63175,
+      "tokens_pushed": 258764800,
+      "train_loss": 2.4363,
+      "val_loss": 0.7521,
+      "val_ppl": 2.12,
+      "lr": 0.00013280590275672967,
+      "tok_per_sec": 4555.1,
+      "source_counts": {
+        "fineweb_edu": 79712,
+        "hf_multilang_code": 79619,
+        "buildbit_c_cpp_lua": 64360,
+        "smoltalk": 28713,
+        "code_python": 19086,
+        "reasoning_think": 48284
+      }
+    },
+    {
+      "step": 63200,
+      "tokens_pushed": 258867200,
+      "train_loss": 2.3517,
+      "val_loss": 0.7534,
+      "val_ppl": 2.12,
+      "lr": 0.00013279305008489682,
+      "tok_per_sec": 4555.3,
+      "source_counts": {
+        "fineweb_edu": 79761,
+        "hf_multilang_code": 79674,
+        "buildbit_c_cpp_lua": 64416,
+        "smoltalk": 28738,
+        "code_python": 19096,
+        "reasoning_think": 48320
+      }
+    },
+    {
+      "step": 63225,
+      "tokens_pushed": 258969600,
+      "train_loss": 1.3215,
+      "val_loss": 0.7532,
+      "val_ppl": 2.12,
+      "lr": 0.0001327801935018498,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 79813,
+        "hf_multilang_code": 79732,
+        "buildbit_c_cpp_lua": 64472,
+        "smoltalk": 28759,
+        "code_python": 19115,
+        "reasoning_think": 48348
+      }
+    },
+    {
+      "step": 63250,
+      "tokens_pushed": 259072000,
+      "train_loss": 1.1053,
+      "val_loss": 0.7621,
+      "val_ppl": 2.14,
+      "lr": 0.00013276733300891913,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 79876,
+        "hf_multilang_code": 79800,
+        "buildbit_c_cpp_lua": 64520,
+        "smoltalk": 28777,
+        "code_python": 19128,
+        "reasoning_think": 48388
+      },
+      "sample_generation": "### User:\nWrite a C function that counts the number of vowels in a null-terminated string.\n\n### Assistant:\n<think>\nWe iterate through the `const char *s` pointer until `'\\0'`, convert each character to lowercase with bitwise `(c | 32)`, and increment the counter on `'a'`,"
+    },
+    {
+      "step": 63275,
+      "tokens_pushed": 259174400,
+      "train_loss": 1.1555,
+      "val_loss": 0.7612,
+      "val_ppl": 2.14,
+      "lr": 0.00013275446860743577,
+      "tok_per_sec": 4554.9,
+      "source_counts": {
+        "fineweb_edu": 79942,
+        "hf_multilang_code": 79858,
+        "buildbit_c_cpp_lua": 64563,
+        "smoltalk": 28794,
+        "code_python": 19142,
+        "reasoning_think": 48432
+      }
+    },
+    {
+      "step": 63300,
+      "tokens_pushed": 259276800,
+      "train_loss": 2.3301,
+      "val_loss": 0.7554,
+      "val_ppl": 2.13,
+      "lr": 0.00013274160029873102,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 80000,
+        "hf_multilang_code": 79921,
+        "buildbit_c_cpp_lua": 64611,
+        "smoltalk": 28820,
+        "code_python": 19159,
+        "reasoning_think": 48468
+      }
+    },
+    {
+      "step": 63325,
+      "tokens_pushed": 259379200,
+      "train_loss": 0.8848,
+      "val_loss": 0.7535,
+      "val_ppl": 2.12,
+      "lr": 0.00013272872808413663,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 80065,
+        "hf_multilang_code": 79977,
+        "buildbit_c_cpp_lua": 64659,
+        "smoltalk": 28835,
+        "code_python": 19175,
+        "reasoning_think": 48512
+      }
+    },
+    {
+      "step": 63350,
+      "tokens_pushed": 259481600,
+      "train_loss": 1.5314,
+      "val_loss": 0.7551,
+      "val_ppl": 2.13,
+      "lr": 0.00013271585196498483,
+      "tok_per_sec": 4555.4,
+      "source_counts": {
+        "fineweb_edu": 80129,
+        "hf_multilang_code": 80027,
+        "buildbit_c_cpp_lua": 64707,
+        "smoltalk": 28857,
+        "code_python": 19191,
+        "reasoning_think": 48545
+      }
+    },
+    {
+      "step": 63375,
+      "tokens_pushed": 259584000,
+      "train_loss": 1.8413,
+      "val_loss": 0.7568,
+      "val_ppl": 2.13,
+      "lr": 0.0001327029719426081,
+      "tok_per_sec": 4555.6,
+      "source_counts": {
+        "fineweb_edu": 80200,
+        "hf_multilang_code": 80079,
+        "buildbit_c_cpp_lua": 64747,
+        "smoltalk": 28882,
+        "code_python": 19206,
+        "reasoning_think": 48576
+      },
+      "sample_generation": "### User:\nWrite a Lua module implementing a `Point` class using metatables.\n\n### Assistant:\n<think>\nIn Lua, we define `local Timer = {}`, set `Timer.__index = Timer`, and use `setmetatable` in `Timer.new`.\n</think>\n```lu"
+    },
+    {
+      "step": 63400,
+      "tokens_pushed": 259686400,
+      "train_loss": 1.4385,
+      "val_loss": 0.7539,
+      "val_ppl": 2.13,
+      "lr": 0.0001326900880183394,
+      "tok_per_sec": 4555.3,
+      "source_counts": {
+        "fineweb_edu": 80269,
+        "hf_multilang_code": 80142,
+        "buildbit_c_cpp_lua": 64787,
+        "smoltalk": 28903,
+        "code_python": 19230,
+        "reasoning_think": 48619
+      }
+    },
+    {
+      "step": 63425,
+      "tokens_pushed": 259788800,
+      "train_loss": 1.3017,
+      "val_loss": 0.7495,
+      "val_ppl": 2.12,
+      "lr": 0.0001326772001935121,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 80331,
+        "hf_multilang_code": 80201,
+        "buildbit_c_cpp_lua": 64840,
+        "smoltalk": 28919,
+        "code_python": 19243,
+        "reasoning_think": 48658
+      }
+    },
+    {
+      "step": 63450,
+      "tokens_pushed": 259891200,
+      "train_loss": 0.83,
+      "val_loss": 0.7544,
+      "val_ppl": 2.13,
+      "lr": 0.00013266430846945997,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 80388,
+        "hf_multilang_code": 80260,
+        "buildbit_c_cpp_lua": 64883,
+        "smoltalk": 28935,
+        "code_python": 19256,
+        "reasoning_think": 48696
+      }
+    },
+    {
+      "step": 63475,
+      "tokens_pushed": 259993600,
+      "train_loss": 0.7659,
+      "val_loss": 0.7551,
+      "val_ppl": 2.13,
+      "lr": 0.00013265141284751717,
+      "tok_per_sec": 4555.3,
+      "source_counts": {
+        "fineweb_edu": 80448,
+        "hf_multilang_code": 80337,
+        "buildbit_c_cpp_lua": 64930,
+        "smoltalk": 28951,
+        "code_python": 19264,
+        "reasoning_think": 48740
+      }
+    },
+    {
+      "step": 63500,
+      "tokens_pushed": 260096000,
+      "train_loss": 1.5192,
+      "val_loss": 0.7567,
+      "val_ppl": 2.13,
+      "lr": 0.0001326385133290183,
+      "tok_per_sec": 4555.5,
+      "source_counts": {
+        "fineweb_edu": 80511,
+        "hf_multilang_code": 80397,
+        "buildbit_c_cpp_lua": 64976,
+        "smoltalk": 28972,
+        "code_python": 19280,
+        "reasoning_think": 48781
+      },
+      "sample_generation": "### User:\nIf a train travels at 60 miles per hour for 3 hours, how far does it travel in total?\n\n### Assistant:\n<think>\nDistance equals speed multiplied by time:\nDistance = 60 mph * 3 hours = 150 miles.\n</think>\nThe train travels **150 miles** in 3 hours."
+    },
+    {
+      "step": 63525,
+      "tokens_pushed": 260198400,
+      "train_loss": 2.0987,
+      "val_loss": 0.7535,
+      "val_ppl": 2.12,
+      "lr": 0.0001326256099152983,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 80567,
+        "hf_multilang_code": 80441,
+        "buildbit_c_cpp_lua": 65029,
+        "smoltalk": 28996,
+        "code_python": 19287,
+        "reasoning_think": 48816
+      }
+    },
+    {
+      "step": 63550,
+      "tokens_pushed": 260300800,
+      "train_loss": 1.5674,
+      "val_loss": 0.7565,
+      "val_ppl": 2.13,
+      "lr": 0.00013261270260769254,
+      "tok_per_sec": 4555.4,
+      "source_counts": {
+        "fineweb_edu": 80619,
+        "hf_multilang_code": 80508,
+        "buildbit_c_cpp_lua": 65089,
+        "smoltalk": 29018,
+        "code_python": 19304,
+        "reasoning_think": 48844
+      }
+    },
+    {
+      "step": 63575,
+      "tokens_pushed": 260403200,
+      "train_loss": 1.1211,
+      "val_loss": 0.7584,
+      "val_ppl": 2.13,
+      "lr": 0.00013259979140753684,
+      "tok_per_sec": 4555.5,
+      "source_counts": {
+        "fineweb_edu": 80668,
+        "hf_multilang_code": 80576,
+        "buildbit_c_cpp_lua": 65129,
+        "smoltalk": 29036,
+        "code_python": 19321,
+        "reasoning_think": 48890
+      }
+    },
+    {
+      "step": 63600,
+      "tokens_pushed": 260505600,
+      "train_loss": 0.9753,
+      "val_loss": 0.7564,
+      "val_ppl": 2.13,
+      "lr": 0.00013258687631616736,
+      "tok_per_sec": 4555.7,
+      "source_counts": {
+        "fineweb_edu": 80725,
+        "hf_multilang_code": 80637,
+        "buildbit_c_cpp_lua": 65185,
+        "smoltalk": 29052,
+        "code_python": 19330,
+        "reasoning_think": 48924
+      }
+    },
+    {
+      "step": 63625,
+      "tokens_pushed": 260608000,
+      "train_loss": 1.1233,
+      "val_loss": 0.7525,
+      "val_ppl": 2.12,
+      "lr": 0.0001325739573349207,
+      "tok_per_sec": 4555.3,
+      "source_counts": {
+        "fineweb_edu": 80788,
+        "hf_multilang_code": 80694,
+        "buildbit_c_cpp_lua": 65236,
+        "smoltalk": 29072,
+        "code_python": 19342,
+        "reasoning_think": 48956
+      },
+      "sample_generation": "### User:\n[python] Write a function to check if a string is a palindrome.\n\n### Assistant:\n<think>\nLet's solve this coding problem step by step.\n</think>\nHere is a function that meets the given requirements:\n\n```python\ndef is_palindrome(string):\n    # Convert the string"
+    },
+    {
+      "step": 63650,
+      "tokens_pushed": 260710400,
+      "train_loss": 1.4541,
+      "val_loss": 0.7515,
+      "val_ppl": 2.12,
+      "lr": 0.00013256103446513385,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 80859,
+        "hf_multilang_code": 80748,
+        "buildbit_c_cpp_lua": 65285,
+        "smoltalk": 29096,
+        "code_python": 19356,
+        "reasoning_think": 48995
+      }
+    },
+    {
+      "step": 63675,
+      "tokens_pushed": 260812800,
+      "train_loss": 1.3006,
+      "val_loss": 0.7527,
+      "val_ppl": 2.12,
+      "lr": 0.00013254810770814418,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 80919,
+        "hf_multilang_code": 80810,
+        "buildbit_c_cpp_lua": 65329,
+        "smoltalk": 29118,
+        "code_python": 19363,
+        "reasoning_think": 49029
+      }
+    },
+    {
+      "step": 63700,
+      "tokens_pushed": 260915200,
+      "train_loss": 0.9394,
+      "val_loss": 0.7561,
+      "val_ppl": 2.13,
+      "lr": 0.00013253517706528952,
+      "tok_per_sec": 4555.4,
+      "source_counts": {
+        "fineweb_edu": 80985,
+        "hf_multilang_code": 80871,
+        "buildbit_c_cpp_lua": 65367,
+        "smoltalk": 29134,
+        "code_python": 19379,
+        "reasoning_think": 49063
+      }
+    },
+    {
+      "step": 63725,
+      "tokens_pushed": 261017600,
+      "train_loss": 1.0757,
+      "val_loss": 0.7548,
+      "val_ppl": 2.13,
+      "lr": 0.00013252224253790801,
+      "tok_per_sec": 4555.6,
+      "source_counts": {
+        "fineweb_edu": 81037,
+        "hf_multilang_code": 80927,
+        "buildbit_c_cpp_lua": 65415,
+        "smoltalk": 29152,
+        "code_python": 19393,
+        "reasoning_think": 49102
+      }
+    },
+    {
+      "step": 63750,
+      "tokens_pushed": 261120000,
+      "train_loss": 1.4396,
+      "val_loss": 0.7536,
+      "val_ppl": 2.12,
+      "lr": 0.0001325093041273383,
+      "tok_per_sec": 4555.7,
+      "source_counts": {
+        "fineweb_edu": 81096,
+        "hf_multilang_code": 80990,
+        "buildbit_c_cpp_lua": 65461,
+        "smoltalk": 29170,
+        "code_python": 19415,
+        "reasoning_think": 49148
+      },
+      "sample_generation": "### User:\nWrite a BuildBit (.bb) function that defines `soa struct Star` and updates positions in parallel.\n\n### Assistant:\n<think>\nIn BuildBit (`bbc`), we declare `soa struct VoxelNode` for 64-byte SIMD alignment, allocate 1024 items in `gpu_arena vram ="
+    },
+    {
+      "step": 63775,
+      "tokens_pushed": 261222400,
+      "train_loss": 1.2758,
+      "val_loss": 0.7535,
+      "val_ppl": 2.12,
+      "lr": 0.00013249636183491938,
+      "tok_per_sec": 4555.4,
+      "source_counts": {
+        "fineweb_edu": 81147,
+        "hf_multilang_code": 81049,
+        "buildbit_c_cpp_lua": 65518,
+        "smoltalk": 29197,
+        "code_python": 19437,
+        "reasoning_think": 49181
+      }
+    },
+    {
+      "step": 63800,
+      "tokens_pushed": 261324800,
+      "train_loss": 2.0217,
+      "val_loss": 0.7528,
+      "val_ppl": 2.12,
+      "lr": 0.00013248341566199064,
+      "tok_per_sec": 4555.6,
+      "source_counts": {
+        "fineweb_edu": 81203,
+        "hf_multilang_code": 81113,
+        "buildbit_c_cpp_lua": 65569,
+        "smoltalk": 29217,
+        "code_python": 19453,
+        "reasoning_think": 49210
+      }
+    },
+    {
+      "step": 63825,
+      "tokens_pushed": 261427200,
+      "train_loss": 1.2352,
+      "val_loss": 0.7578,
+      "val_ppl": 2.13,
+      "lr": 0.00013247046560989188,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 81279,
+        "hf_multilang_code": 81171,
+        "buildbit_c_cpp_lua": 65623,
+        "smoltalk": 29237,
+        "code_python": 19472,
+        "reasoning_think": 49243
+      }
+    },
+    {
+      "step": 63850,
+      "tokens_pushed": 261529600,
+      "train_loss": 2.255,
+      "val_loss": 0.7537,
+      "val_ppl": 2.12,
+      "lr": 0.00013245751167996332,
+      "tok_per_sec": 4555.4,
+      "source_counts": {
+        "fineweb_edu": 81346,
+        "hf_multilang_code": 81223,
+        "buildbit_c_cpp_lua": 65667,
+        "smoltalk": 29265,
+        "code_python": 19487,
+        "reasoning_think": 49288
+      }
+    },
+    {
+      "step": 63875,
+      "tokens_pushed": 261632000,
+      "train_loss": 1.9028,
+      "val_loss": 0.7499,
+      "val_ppl": 2.12,
+      "lr": 0.00013244455387354556,
+      "tok_per_sec": 4555.6,
+      "source_counts": {
+        "fineweb_edu": 81413,
+        "hf_multilang_code": 81279,
+        "buildbit_c_cpp_lua": 65714,
+        "smoltalk": 29288,
+        "code_python": 19507,
+        "reasoning_think": 49320
+      },
+      "sample_generation": "### User:\nWrite a C function that counts the number of vowels in a null-terminated string.\n\n### Assistant:\n<think>\nWe iterate through the `const char *s` pointer until `'\\0'`, convert each character to lowercase with bitwise `(c | 32)`, and increment the counter on `'a'`,"
+    },
+    {
+      "step": 63900,
+      "tokens_pushed": 261734400,
+      "train_loss": 1.3848,
+      "val_loss": 0.7529,
+      "val_ppl": 2.12,
+      "lr": 0.0001324315921919796,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 81473,
+        "hf_multilang_code": 81333,
+        "buildbit_c_cpp_lua": 65767,
+        "smoltalk": 29306,
+        "code_python": 19524,
+        "reasoning_think": 49346
+      }
+    },
+    {
+      "step": 63925,
+      "tokens_pushed": 261836800,
+      "train_loss": 1.3454,
+      "val_loss": 0.7543,
+      "val_ppl": 2.13,
+      "lr": 0.00013241862663660687,
+      "tok_per_sec": 4555.4,
+      "source_counts": {
+        "fineweb_edu": 81523,
+        "hf_multilang_code": 81390,
+        "buildbit_c_cpp_lua": 65828,
+        "smoltalk": 29333,
+        "code_python": 19540,
+        "reasoning_think": 49392
+      }
+    },
+    {
+      "step": 63950,
+      "tokens_pushed": 261939200,
+      "train_loss": 1.5254,
+      "val_loss": 0.7551,
+      "val_ppl": 2.13,
+      "lr": 0.00013240565720876914,
+      "tok_per_sec": 4555.6,
+      "source_counts": {
+        "fineweb_edu": 81583,
+        "hf_multilang_code": 81448,
+        "buildbit_c_cpp_lua": 65860,
+        "smoltalk": 29360,
+        "code_python": 19551,
+        "reasoning_think": 49419
+      }
+    },
+    {
+      "step": 63975,
+      "tokens_pushed": 262041600,
+      "train_loss": 1.0179,
+      "val_loss": 0.7603,
+      "val_ppl": 2.14,
+      "lr": 0.00013239268390980864,
+      "tok_per_sec": 4555.8,
+      "source_counts": {
+        "fineweb_edu": 81640,
+        "hf_multilang_code": 81513,
+        "buildbit_c_cpp_lua": 65909,
+        "smoltalk": 29381,
+        "code_python": 19563,
+        "reasoning_think": 49455
+      }
+    },
+    {
+      "step": 64000,
+      "tokens_pushed": 262144000,
+      "train_loss": 1.5314,
+      "val_loss": 0.7582,
+      "val_ppl": 2.13,
+      "lr": 0.000132379706741068,
+      "tok_per_sec": 4555.9,
+      "source_counts": {
+        "fineweb_edu": 81701,
+        "hf_multilang_code": 81567,
+        "buildbit_c_cpp_lua": 65959,
+        "smoltalk": 29405,
+        "code_python": 19578,
+        "reasoning_think": 49483
+      },
+      "sample_generation": "### User:\nWrite a Lua module implementing a `Point` class using metatables.\n\n### Assistant:\n<think>\nIn Lua, we define `local Vec2 = {}`, set `Vec2.__index = Vec2`, and use `setmetatable` in `Vec2.new`.\n</think>\n"
+    },
+    {
+      "step": 64025,
+      "tokens_pushed": 262246400,
+      "train_loss": 1.6547,
+      "val_loss": 0.7605,
+      "val_ppl": 2.14,
+      "lr": 0.0001323667257038902,
+      "tok_per_sec": 4555.0,
+      "source_counts": {
+        "fineweb_edu": 81762,
+        "hf_multilang_code": 81628,
+        "buildbit_c_cpp_lua": 66002,
+        "smoltalk": 29426,
+        "code_python": 19593,
+        "reasoning_think": 49516
+      }
+    },
+    {
+      "step": 64050,
+      "tokens_pushed": 262348800,
+      "train_loss": 1.4932,
+      "val_loss": 0.7616,
+      "val_ppl": 2.14,
+      "lr": 0.00013235374079961868,
+      "tok_per_sec": 4555.2,
+      "source_counts": {
+        "fineweb_edu": 81808,
+        "hf_multilang_code": 81693,
+        "buildbit_c_cpp_lua": 66051,
+        "smoltalk": 29444,
+        "code_python": 19601,
+        "reasoning_think": 49553
+      }
+    },
+    {
+      "step": 64075,
+      "tokens_pushed": 262451200,
+      "train_loss": 1.2725,
+      "val_loss": 0.7579,
+      "val_ppl": 2.13,
+      "lr": 0.00013234075202959726,
+      "tok_per_sec": 4555.4,
+      "source_counts": {
+        "fineweb_edu": 81876,
+        "hf_multilang_code": 81742,
+        "buildbit_c_cpp_lua": 66100,
+        "smoltalk": 29465,
+        "code_python": 19617,
+        "reasoning_think": 49587
+      }
+    },
+    {
+      "step": 64100,
+      "tokens_pushed": 262553600,
+      "train_loss": 1.2016,
+      "val_loss": 0.7583,
+      "val_ppl": 2.13,
+      "lr": 0.0001323277593951701,
+      "tok_per_sec": 4555.6,
+      "source_counts": {
+        "fineweb_edu": 81927,
+        "hf_multilang_code": 81804,
+        "buildbit_c_cpp_lua": 66146,
+        "smoltalk": 29488,
+        "code_python": 19632,
+        "reasoning_think": 49623
+      }
+    },
+    {
+      "step": 64125,
+      "tokens_pushed": 262656000,
+      "train_loss": 1.9734,
+      "val_loss": 0.7636,
+      "val_ppl": 2.15,
+      "lr": 0.00013231476289768184,
+      "tok_per_sec": 4555.7,
+      "source_counts": {
+        "fineweb_edu": 81996,
+        "hf_multilang_code": 81862,
+        "buildbit_c_cpp_lua": 66179,
+        "smoltalk": 29509,
+        "code_python": 19644,
+        "reasoning_think": 49664
+      },
+      "sample_generation": "### User:\nIf a train travels at 60 miles per hour for 3 hours, how far does it travel in total?\n\n### Assistant:\n<think>\nDistance equals speed multiplied by time:\nDistance = 60 mph * 3 hours = 180 miles.\n</think>\nThe train travels **180 miles** in 3 hours."
+    },
+    {
+      "step": 64150,
+      "tokens_pushed": 262758400,
+      "train_loss": 1.3,
+      "val_loss": 0.763,
+      "val_ppl": 2.14,
+      "lr": 0.00013230176253847752,
+      "tok_per_sec": 4555.4,
+      "source_counts": {
+        "fineweb_edu": 82055,
+        "hf_multilang_code": 81923,
+        "buildbit_c_cpp_lua": 66215,
+        "smoltalk": 29532,
+        "code_python": 19664,
+        "reasoning_think": 49699
+      }
+    },
+    {
+      "step": 64175,
+      "tokens_pushed": 262860800,
+      "train_loss": 1.7152,
+      "val_loss": 0.7609,
+      "val_ppl": 2.14,
+      "lr": 0.00013228875831890248,
+      "tok_per_sec": 4555.6,
+      "source_counts": {
+        "fineweb_edu": 82125,
+        "hf_multilang_code": 81983,
+        "buildbit_c_cpp_lua": 66252,
+        "smoltalk": 29552,
+        "code_python": 19681,
+        "reasoning_think": 49731
+      }
+    },
+    {
+      "step": 64200,
+      "tokens_pushed": 262963200,
+      "train_loss": 1.809,
+      "val_loss": 0.7609,
+      "val_ppl": 2.14,
+      "lr": 0.0001322757502403026,
+      "tok_per_sec": 4555.7,
+      "source_counts": {
+        "fineweb_edu": 82188,
+        "hf_multilang_code": 82037,
+        "buildbit_c_cpp_lua": 66293,
+        "smoltalk": 29578,
+        "code_python": 19695,
+        "reasoning_think": 49770
+      }
+    },
+    {
+      "step": 64225,
+      "tokens_pushed": 263065600,
+      "train_loss": 1.0637,
+      "val_loss": 0.7658,
+      "val_ppl": 2.15,
+      "lr": 0.00013226273830402408,
+      "tok_per_sec": 4553.8,
+      "source_counts": {
+        "fineweb_edu": 82261,
+        "hf_multilang_code": 82107,
+        "buildbit_c_cpp_lua": 66342,
+        "smoltalk": 29596,
+        "code_python": 19710,
+        "reasoning_think": 49804
+      }
+    },
+    {
+      "step": 64250,
+      "tokens_pushed": 263168000,
+      "train_loss": 1.8349,
+      "val_loss": 0.7698,
+      "val_ppl": 2.16,
+      "lr": 0.0001322497225114135,
+      "tok_per_sec": 4553.9,
+      "source_counts": {
+        "fineweb_edu": 82341,
+        "hf_multilang_code": 82197,
+        "buildbit_c_cpp_lua": 66414,
+        "smoltalk": 29628,
+        "code_python": 19731,
+        "reasoning_think": 49862
+      },
+      "sample_generation": "### User:\n[python] Write a function to check if a string is a palindrome.\n\n### Assistant:\n<think>\nLet's solve this coding problem step by step.\n</think>\ndef is_palindrome(string):\n    if not string:\n        return False\n    if string.isdigit():\n        return True\n    if"
+    },
+    {
+      "step": 64275,
+      "tokens_pushed": 263270400,
+      "train_loss": 1.1465,
+      "val_loss": 0.7635,
+      "val_ppl": 2.15,
+      "lr": 0.00013223670286381786,
+      "tok_per_sec": 4553.5,
+      "source_counts": {
+        "fineweb_edu": 82409,
+        "hf_multilang_code": 82276,
+        "buildbit_c_cpp_lua": 66480,
+        "smoltalk": 29671,
+        "code_python": 19749,
+        "reasoning_think": 49907
+      }
+    },
+    {
+      "step": 64300,
+      "tokens_pushed": 263372800,
+      "train_loss": 1.7447,
+      "val_loss": 0.762,
+      "val_ppl": 2.14,
+      "lr": 0.0001322236793625846,
+      "tok_per_sec": 4553.6,
+      "source_counts": {
+        "fineweb_edu": 82488,
+        "hf_multilang_code": 82344,
+        "buildbit_c_cpp_lua": 66543,
+        "smoltalk": 29702,
+        "code_python": 19777,
+        "reasoning_think": 49959
+      }
+    },
+    {
+      "step": 64325,
+      "tokens_pushed": 263475200,
+      "train_loss": 1.2685,
+      "val_loss": 0.7603,
+      "val_ppl": 2.14,
+      "lr": 0.00013221065200906155,
+      "tok_per_sec": 4553.8,
+      "source_counts": {
+        "fineweb_edu": 82569,
+        "hf_multilang_code": 82409,
+        "buildbit_c_cpp_lua": 66610,
+        "smoltalk": 29725,
+        "code_python": 19796,
+        "reasoning_think": 50004
+      }
+    }
+  ]
+}

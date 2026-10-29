@@ -1,0 +1,36 @@
+{
+  "rejected_code_review_poison": 7157,
+  "rejected_benchmark_holdout": 0,
+  "rejected_too_short_or_overlong": 0,
+  "domain_rows_pretrain": {
+    "edu_textbooks_prose": 45609,
+    "conversational_plain_english": 16663,
+    "polyglot_from_scratch_code": 29501,
+    "think_math_reasoning": 15501,
+    "long_2k_niah_retrieval": 15501
+  },
+  "domain_tokens_pretrain": {
+    "edu_textbooks_prose": 93407232,
+    "conversational_plain_english": 34125824,
+    "polyglot_from_scratch_code": 60418048,
+    "think_math_reasoning": 31746048,
+    "long_2k_niah_retrieval": 31746048
+  },
+  "domain_rows_sft": {
+    "conversational_plain_english": 4201,
+    "polyglot_from_scratch_code": 5401,
+    "think_math_reasoning": 3201,
+    "long_2k_niah_retrieval": 3201
+  },
+  "domain_tokens_sft": {
+    "conversational_plain_english": 8603648,
+    "polyglot_from_scratch_code": 11061248,
+    "think_math_reasoning": 6555648,
+    "long_2k_niah_retrieval": 6555648
+  },
+  "total_pretrain_train_tokens": 248371200,
+  "total_pretrain_val_tokens": 3072000,
+  "total_sft_train_tokens": 31956992,
+  "total_sft_val_tokens": 819200,
+  "elapsed_seconds": 574.35
+}

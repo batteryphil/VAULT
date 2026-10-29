@@ -1,0 +1,105 @@
+{
+  "model": "VAULTLM-150M-FlashVAULT-SFT",
+  "base_checkpoint": "/home/phil/.gemini/antigravity/scratch/vault/checkpoints/vault_150m_best.pt",
+  "latest_step": 240,
+  "total_steps": 240,
+  "best_val_loss": 2.1262,
+  "best_val_ppl": 8.38,
+  "history": [
+    {
+      "step": 1,
+      "train_loss": 3.9056,
+      "val_loss": 3.2806,
+      "val_ppl": 26.59,
+      "tok_per_sec": 631.9
+    },
+    {
+      "step": 20,
+      "train_loss": 3.4915,
+      "val_loss": 2.725,
+      "val_ppl": 15.26,
+      "tok_per_sec": 1088.0
+    },
+    {
+      "step": 40,
+      "train_loss": 2.5303,
+      "val_loss": 2.4351,
+      "val_ppl": 11.42,
+      "tok_per_sec": 1090.3
+    },
+    {
+      "step": 60,
+      "train_loss": 2.1758,
+      "val_loss": 2.3047,
+      "val_ppl": 10.02,
+      "tok_per_sec": 1090.9,
+      "unseen_recursion_probe": "<think>\nLet's plan the implementation of the binary search algorithm in Python.\n</think>\n```python\ndef binary_search(arr, element):\n    left = 0\n    right = len(arr) - 1\n\n    while left <= right:\n        mid = (left + right) // 2\n\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left += 1\n        else:\n            right -= 1\n    return -1\n\narr = [2, 4, 6, 8, 1, 3, 5]\ntarget = 2\n\nprint(find_first_first_five_even(arr))"
+    },
+    {
+      "step": 80,
+      "train_loss": 3.0475,
+      "val_loss": 2.24,
+      "val_ppl": 9.39,
+      "tok_per_sec": 1082.1
+    },
+    {
+      "step": 100,
+      "train_loss": 2.5065,
+      "val_loss": 2.1983,
+      "val_ppl": 9.01,
+      "tok_per_sec": 1074.1
+    },
+    {
+      "step": 120,
+      "train_loss": 1.9805,
+      "val_loss": 2.1545,
+      "val_ppl": 8.62,
+      "tok_per_sec": 1083.4,
+      "unseen_recursion_probe": "<think>\nLet's answer this question directly in Python.\n</think>\nIn Python, the base case is when a given number of elements is defined as the sum of the first 1 elements in the list. This is because the sum of the first 1 elements in the list is 100. Therefore, the sum of the first 100 elements in the list is 100."
+    },
+    {
+      "step": 140,
+      "train_loss": 2.4774,
+      "val_loss": 2.1383,
+      "val_ppl": 8.48,
+      "tok_per_sec": 1084.4
+    },
+    {
+      "step": 160,
+      "train_loss": 2.2314,
+      "val_loss": 2.1356,
+      "val_ppl": 8.46,
+      "tok_per_sec": 1087.1
+    },
+    {
+      "step": 180,
+      "train_loss": 2.8839,
+      "val_loss": 2.1316,
+      "val_ppl": 8.43,
+      "tok_per_sec": 1088.9,
+      "unseen_recursion_probe": "<think>\nLet's analyze the requirements carefully and provide a clean implementation with explanation.\n</think>\nIn Python, the `const` module is used to define an object's attributes, and the `std::vector` class is used to define an object's attributes. The `std::vector` class has methods for creating objects, and the `get_all` method returns the size of the object. In Python, the `get_all` method checks if the size of the object is within the correct length. If the size of the object is less than or equal to 0, it returns a list of all elements in the list that are not in the list."
+    },
+    {
+      "step": 200,
+      "train_loss": 1.626,
+      "val_loss": 2.1271,
+      "val_ppl": 8.39,
+      "tok_per_sec": 1086.4
+    },
+    {
+      "step": 220,
+      "train_loss": 1.5784,
+      "val_loss": 2.1262,
+      "val_ppl": 8.38,
+      "tok_per_sec": 1087.1
+    },
+    {
+      "step": 240,
+      "train_loss": 2.2551,
+      "val_loss": 2.128,
+      "val_ppl": 8.4,
+      "tok_per_sec": 1087.5,
+      "unseen_recursion_probe": "<think>\nLet's plan the algorithm, verify its time and space complexity, and implement a clean Python function.\n</think>\n```python\ndef binary_search(arr, target):\n    left = 0\n    right = len(arr) - 1\n\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1"
+    }
+  ]
+}

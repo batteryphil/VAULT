@@ -1,0 +1,189 @@
+{
+  "stage1": [
+    {
+      "step": 1,
+      "train_loss": 5.2829,
+      "val_loss": 4.4259,
+      "val_ppl": 83.59,
+      "tok_s": 648.2
+    },
+    {
+      "step": 20,
+      "train_loss": 3.2656,
+      "val_loss": 3.9844,
+      "val_ppl": 53.75,
+      "tok_s": 1093.7
+    },
+    {
+      "step": 40,
+      "train_loss": 3.024,
+      "val_loss": 3.6129,
+      "val_ppl": 37.07,
+      "tok_s": 1111.7
+    },
+    {
+      "step": 60,
+      "train_loss": 3.0462,
+      "val_loss": 3.4486,
+      "val_ppl": 31.46,
+      "tok_s": 1103.3
+    },
+    {
+      "step": 80,
+      "train_loss": 2.6424,
+      "val_loss": 3.3344,
+      "val_ppl": 28.06,
+      "tok_s": 1098.1
+    },
+    {
+      "step": 100,
+      "train_loss": 2.1932,
+      "val_loss": 3.2503,
+      "val_ppl": 25.8,
+      "tok_s": 1104.3
+    },
+    {
+      "step": 120,
+      "train_loss": 3.0534,
+      "val_loss": 3.216,
+      "val_ppl": 24.93,
+      "tok_s": 1108.4
+    },
+    {
+      "step": 140,
+      "train_loss": 2.7968,
+      "val_loss": 3.1926,
+      "val_ppl": 24.35,
+      "tok_s": 1107.5
+    },
+    {
+      "step": 160,
+      "train_loss": 2.9939,
+      "val_loss": 3.1754,
+      "val_ppl": 23.94,
+      "tok_s": 1106.2
+    },
+    {
+      "step": 180,
+      "train_loss": 3.0522,
+      "val_loss": 3.165,
+      "val_ppl": 23.69,
+      "tok_s": 1108.8
+    },
+    {
+      "step": 200,
+      "train_loss": 1.8375,
+      "val_loss": 3.1588,
+      "val_ppl": 23.54,
+      "tok_s": 1108.1
+    },
+    {
+      "step": 220,
+      "train_loss": 2.4253,
+      "val_loss": 3.1539,
+      "val_ppl": 23.43,
+      "tok_s": 1107.6
+    }
+  ],
+  "stage2": [
+    {
+      "step": 1,
+      "train_loss": 2.2144,
+      "val_loss": 2.0321,
+      "val_ppl": 7.63,
+      "tok_s": 982.3
+    },
+    {
+      "step": 20,
+      "train_loss": 2.5164,
+      "val_loss": 2.0066,
+      "val_ppl": 7.44,
+      "tok_s": 1117.9
+    },
+    {
+      "step": 40,
+      "train_loss": 3.294,
+      "val_loss": 1.9536,
+      "val_ppl": 7.05,
+      "tok_s": 1096.7
+    },
+    {
+      "step": 60,
+      "train_loss": 2.5798,
+      "val_loss": 1.9105,
+      "val_ppl": 6.76,
+      "tok_s": 1103.6,
+      "unseen_prose": "<think>\nLet's solve this coding problem step by step.\n</think>\nThe code is correct.",
+      "unseen_math": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe rover travels **180 miles** in 4 hours."
+    },
+    {
+      "step": 80,
+      "train_loss": 2.8855,
+      "val_loss": 1.8863,
+      "val_ppl": 6.6,
+      "tok_s": 1090.3
+    },
+    {
+      "step": 100,
+      "train_loss": 1.478,
+      "val_loss": 1.8582,
+      "val_ppl": 6.41,
+      "tok_s": 1090.1
+    },
+    {
+      "step": 120,
+      "train_loss": 2.473,
+      "val_loss": 1.8457,
+      "val_ppl": 6.33,
+      "tok_s": 1095.4,
+      "unseen_prose": "<think>\nThe given code is correct, but there are a few issues that can be made to improve performance. Here's a revised version:\n\n```python\ndef find_longest_subsequence(arr):\n    if len(arr) <= 1:\n        return -1\n\n    max_length = 2\n    max_length = 2\n\n    for i in range(len(arr)):\n        if arr[i] > max_length:\n            max_length = i\n            max_length = i\n            max_length = j = i\n            max_length = j = i\n            max_length = i\n        else:\n        max_length = 0",
+      "unseen_math": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe rover travels **180 miles** in 4 hours."
+    },
+    {
+      "step": 140,
+      "train_loss": 2.9032,
+      "val_loss": 1.8372,
+      "val_ppl": 6.28,
+      "tok_s": 1072.8
+    },
+    {
+      "step": 160,
+      "train_loss": 1.7021,
+      "val_loss": 1.826,
+      "val_ppl": 6.21,
+      "tok_s": 1079.7
+    },
+    {
+      "step": 180,
+      "train_loss": 3.1081,
+      "val_loss": 1.8281,
+      "val_ppl": 6.22,
+      "tok_s": 1085.1,
+      "unseen_prose": "<think>\nThe given code is correct, but there are a few issues that can be made to improve performance. Here's a revised version:\n\n```python\nimport random\n\nclass TestManager(unittest.TestCase):\n    def test_get_user_name(self):\n        self.input_input = input(\"Enter your name: \")\n        self.input_input = input(\"Enter your email address: \")\n        self.input_input = input(\"Enter your email address: \")\n\n    def validate_input(self):\n        try:\n            return self.input(\"Enter the number of times in the program: \")\n        except ValueError:\n            print(\"Invalid input.",
+      "unseen_math": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe rover travels **180 miles** in 4 hours."
+    },
+    {
+      "step": 200,
+      "train_loss": 2.0485,
+      "val_loss": 1.8163,
+      "val_ppl": 6.15,
+      "tok_s": 1078.1
+    },
+    {
+      "step": 220,
+      "train_loss": 1.8066,
+      "val_loss": 1.8188,
+      "val_ppl": 6.16,
+      "tok_s": 1078.9
+    },
+    {
+      "step": 240,
+      "train_loss": 2.7439,
+      "val_loss": 1.8176,
+      "val_ppl": 6.16,
+      "tok_s": 1083.4,
+      "unseen_prose": "<think>\nLet's solve this coding problem step by step.\n</think>\nThe code is correct and does not require the correct implementation.",
+      "unseen_math": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe rover travels **180 miles** in 4 hours."
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+# Model weights & checkpoints
+checkpoints/
+*.pt
+*.pth
+*.safetensors
+*.ckpt
+
+# Binary datasets & raw downloads (keep audit_report.json tracked)
+data_v2/*.bin
+data_v2/raw/
+data/
+
+# Compiled C binaries & shared libraries
+c/bench_vault
+c/torture_vault
+c/libvault.so
+*.o
+*.so
+
+# Runtime logs, PID files, and live telemetry scratch
+*.log
+*.pid
+benchmarks/vault_v2_telemetry.json
+
+# Python / Triton caches & virtualenvs
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.triton/
+venv/
+.venv/
+.env
+
+# OS / Editor metadata
+.DS_Store
+*.swp
+*~

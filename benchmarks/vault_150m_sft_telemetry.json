@@ -1,0 +1,286 @@
+{
+  "model": "VAULTLM-150M-SFT",
+  "base_tokens": 100864000,
+  "latest_step": 900,
+  "best_sft_val_loss": 1.2489,
+  "best_sft_val_ppl": 3.49,
+  "history": [
+    {
+      "step": 1,
+      "train_loss": 3.5127,
+      "val_loss": 4.0174,
+      "val_ppl": 55.56,
+      "tok_per_sec": 771.2
+    },
+    {
+      "step": 25,
+      "train_loss": 4.6385,
+      "val_loss": 3.6879,
+      "val_ppl": 39.96,
+      "tok_per_sec": 4000.1
+    },
+    {
+      "step": 50,
+      "train_loss": 2.8946,
+      "val_loss": 2.928,
+      "val_ppl": 18.69,
+      "tok_per_sec": 4329.5
+    },
+    {
+      "step": 75,
+      "train_loss": 2.8041,
+      "val_loss": 2.4048,
+      "val_ppl": 11.08,
+      "tok_per_sec": 4452.8
+    },
+    {
+      "step": 100,
+      "train_loss": 2.0674,
+      "val_loss": 2.1045,
+      "val_ppl": 8.2,
+      "tok_per_sec": 4514.9,
+      "probe_skill": "C",
+      "probe_output": "<think>\nAloryl C93-604 involving humans.\n</think>\n**Example 64-64-124 with a standard normal distribution:** 64-64\n```c\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n\nvoid main() {\n    std::cout << \"Enter your name: \";"
+    },
+    {
+      "step": 125,
+      "train_loss": 1.9995,
+      "val_loss": 1.9188,
+      "val_ppl": 6.81,
+      "tok_per_sec": 4279.2
+    },
+    {
+      "step": 150,
+      "train_loss": 1.8907,
+      "val_loss": 1.7992,
+      "val_ppl": 6.04,
+      "tok_per_sec": 4344.9
+    },
+    {
+      "step": 175,
+      "train_loss": 1.5667,
+      "val_loss": 1.7159,
+      "val_ppl": 5.56,
+      "tok_per_sec": 4393.1
+    },
+    {
+      "step": 200,
+      "train_loss": 1.3442,
+      "val_loss": 1.6529,
+      "val_ppl": 5.22,
+      "tok_per_sec": 4429.3,
+      "probe_skill": "Lua",
+      "probe_output": "<think>\nIn Lua, object-oriented classes and operatorcho methods are implemented with true `__init__`, `__init__` that print the input.\n</think>\n```c\n#include <stdint.h>\n#include <stddef.h>\n\nvoid print_empty(const std::string& item) {\n    if (data.size() == -1) return false;\n    if (data.size())"
+    },
+    {
+      "step": 225,
+      "train_loss": 1.5609,
+      "val_loss": 1.6059,
+      "val_ppl": 4.98,
+      "tok_per_sec": 4326.9
+    },
+    {
+      "step": 250,
+      "train_loss": 1.3199,
+      "val_loss": 1.5792,
+      "val_ppl": 4.85,
+      "tok_per_sec": 4362.4
+    },
+    {
+      "step": 275,
+      "train_loss": 1.255,
+      "val_loss": 1.5387,
+      "val_ppl": 4.66,
+      "tok_per_sec": 4391.2
+    },
+    {
+      "step": 300,
+      "train_loss": 1.5899,
+      "val_loss": 1.5154,
+      "val_ppl": 4.55,
+      "tok_per_sec": 4415.9,
+      "probe_skill": "Reasoning",
+      "probe_output": "<think>\n1. Standard Linear Attention and Mamba-1/2/3 compress all historical tokens into a single fixed-size state matrix `S_t = gamma * S_{t-1} + v_t k_t^T`. When thousands of keys are summed into one matrix, their cross- TeensIAL (`k_i^T k_j != 0`) and exponential decay `gamma < 1` erases old needles."
+    },
+    {
+      "step": 325,
+      "train_loss": 1.9166,
+      "val_loss": 1.4725,
+      "val_ppl": 4.36,
+      "tok_per_sec": 4343.9
+    },
+    {
+      "step": 350,
+      "train_loss": 1.401,
+      "val_loss": 1.4448,
+      "val_ppl": 4.24,
+      "tok_per_sec": 4368.2
+    },
+    {
+      "step": 375,
+      "train_loss": 1.9016,
+      "val_loss": 1.424,
+      "val_ppl": 4.15,
+      "tok_per_sec": 4389.5
+    },
+    {
+      "step": 400,
+      "train_loss": 0.6925,
+      "val_loss": 1.4104,
+      "val_ppl": 4.1,
+      "tok_per_sec": 4408.1,
+      "probe_skill": "BuildBit",
+      "probe_output": "<think>\n1. In BuildBit (`bbc`), `soa struct` automatically lays out fields inrief- Michel'sAmong transformers Territory.\n2. In BuildBit the, built-in `gpu` and `soa struct` with `\ufffd of near-the-process- painter` cars, and updating `gpu_of-local` users via `gpu_erah-\u00b7` definitely.\n3. We assigned `gumeric"
+    },
+    {
+      "step": 425,
+      "train_loss": 1.6919,
+      "val_loss": 1.3879,
+      "val_ppl": 4.01,
+      "tok_per_sec": 4348.8
+    },
+    {
+      "step": 450,
+      "train_loss": 1.3889,
+      "val_loss": 1.3672,
+      "val_ppl": 3.92,
+      "tok_per_sec": 4365.0
+    },
+    {
+      "step": 475,
+      "train_loss": 1.6447,
+      "val_loss": 1.3509,
+      "val_ppl": 3.86,
+      "tok_per_sec": 4382.2
+    },
+    {
+      "step": 500,
+      "train_loss": 0.96,
+      "val_loss": 1.3324,
+      "val_ppl": 3.79,
+      "tok_per_sec": 4397.7,
+      "probe_skill": "C",
+      "probe_output": "<think>\nA bump arena advances an offset pointer and rounds up to a 64-byte boundary using `(offset + 63) & ~63ULL`. Resetting the entire arena simply sets `offset = 0`.\n</think>\n```c\n#include <stddef.h>\n#include <stdint.h>\n\ntypedef struct {\n    uint8_t *base;\n    size_t capacity;"
+    },
+    {
+      "step": 525,
+      "train_loss": 1.9008,
+      "val_loss": 1.3209,
+      "val_ppl": 3.75,
+      "tok_per_sec": 4354.8
+    },
+    {
+      "step": 550,
+      "train_loss": 1.0528,
+      "val_loss": 1.316,
+      "val_ppl": 3.73,
+      "tok_per_sec": 4369.9
+    },
+    {
+      "step": 575,
+      "train_loss": 0.8636,
+      "val_loss": 1.3131,
+      "val_ppl": 3.72,
+      "tok_per_sec": 4383.8
+    },
+    {
+      "step": 600,
+      "train_loss": 1.0371,
+      "val_loss": 1.3004,
+      "val_ppl": 3.67,
+      "tok_per_sec": 4396.5,
+      "probe_skill": "Lua",
+      "probe_output": "<think>\nIn Lua, object-oriented classes and operator overloading are implemented with metatables: `__index` for methods, `__add`, `__sub`, `__mul` for arithmetic, and `__tostring` for formatting.\n</think>\n```lua\nlocal Vec2 = {}\nVec2.__index = Vec2\n\nfunction Vec2.new(x, y)\n    return setmet"
+    },
+    {
+      "step": 625,
+      "train_loss": 1.235,
+      "val_loss": 1.2864,
+      "val_ppl": 3.62,
+      "tok_per_sec": 4360.4
+    },
+    {
+      "step": 650,
+      "train_loss": 1.1683,
+      "val_loss": 1.2767,
+      "val_ppl": 3.58,
+      "tok_per_sec": 4373.1
+    },
+    {
+      "step": 675,
+      "train_loss": 1.8251,
+      "val_loss": 1.2734,
+      "val_ppl": 3.57,
+      "tok_per_sec": 4384.7
+    },
+    {
+      "step": 700,
+      "train_loss": 0.6332,
+      "val_loss": 1.2686,
+      "val_ppl": 3.56,
+      "tok_per_sec": 4395.3,
+      "probe_skill": "Reasoning",
+      "probe_output": "<think>\n1. Standard Linear Attention and Mamba-1/2/3 compress all historical tokens into a single fixed-size state matrix `S_t = gamma * S_{t-1} + v_t k_t^T`. When thousands of keys are summed into one vector, they can beneg acorns into another by transforming the L-100-bit elements.\n\" mathematically Korea's first major key of the 17-"
+    },
+    {
+      "step": 725,
+      "train_loss": 1.9433,
+      "val_loss": 1.2627,
+      "val_ppl": 3.53,
+      "tok_per_sec": 4362.9
+    },
+    {
+      "step": 750,
+      "train_loss": 1.8866,
+      "val_loss": 1.2591,
+      "val_ppl": 3.52,
+      "tok_per_sec": 4373.4
+    },
+    {
+      "step": 775,
+      "train_loss": 1.184,
+      "val_loss": 1.2546,
+      "val_ppl": 3.51,
+      "tok_per_sec": 4383.6
+    },
+    {
+      "step": 800,
+      "train_loss": 0.6897,
+      "val_loss": 1.2533,
+      "val_ppl": 3.5,
+      "tok_per_sec": 4393.1,
+      "probe_skill": "BuildBit",
+      "probe_output": "<think>\n1. In BuildBit (`bbc`), `soa struct` automatically lays out fields in contiguous 64-byte AVX-512/GPU-aligned arrays.\n2. We probe the GPU with `gpu_probe()`, declare `gpu_arena vram = 67_108_864`, and allocate with `alloc_soa(vram, Particle, 1_"
+    },
+    {
+      "step": 825,
+      "train_loss": 0.9494,
+      "val_loss": 1.2523,
+      "val_ppl": 3.5,
+      "tok_per_sec": 4366.2
+    },
+    {
+      "step": 850,
+      "train_loss": 1.1891,
+      "val_loss": 1.2515,
+      "val_ppl": 3.5,
+      "tok_per_sec": 4374.4
+    },
+    {
+      "step": 875,
+      "train_loss": 1.3943,
+      "val_loss": 1.2512,
+      "val_ppl": 3.49,
+      "tok_per_sec": 4382.3
+    },
+    {
+      "step": 900,
+      "train_loss": 0.5442,
+      "val_loss": 1.2489,
+      "val_ppl": 3.49,
+      "tok_per_sec": 4389.9,
+      "probe_skill": "C",
+      "probe_output": "<think>\nA bump arena advances an offset pointer and rounds up to a 64-byte boundary using `(offset + 63) & ~63ULL`. Resetting the entire arena simply sets `offset = 0`.\n</think>\n```c\n#include <stddef.h>\n#include <stdint.h>\n\ntypedef struct {\n    uint8_t *base;\n    size_t capacity;"
+    }
+  ]
+}

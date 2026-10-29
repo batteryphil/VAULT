@@ -1,0 +1,393 @@
+{
+  "phase1_deep2k": [
+    {
+      "step": 1,
+      "train_loss": 2.8798,
+      "val_loss": 3.0367,
+      "val_ppl": 20.84,
+      "tok_s": 698.7
+    },
+    {
+      "step": 25,
+      "train_loss": 2.4877,
+      "val_loss": 2.8435,
+      "val_ppl": 17.18,
+      "tok_s": 1618.1
+    },
+    {
+      "step": 50,
+      "train_loss": 2.38,
+      "val_loss": 2.5827,
+      "val_ppl": 13.23,
+      "tok_s": 1617.5
+    },
+    {
+      "step": 75,
+      "train_loss": 2.3929,
+      "val_loss": 2.4264,
+      "val_ppl": 11.32,
+      "tok_s": 1642.2
+    },
+    {
+      "step": 100,
+      "train_loss": 2.3702,
+      "val_loss": 2.3454,
+      "val_ppl": 10.44,
+      "tok_s": 1639.3,
+      "unseen_prose": "<think>\nLet's implement a clean Python function handling edge cases properly.\n</think>\n```python\ndef binary_search(num1, num2):\n    if num1 == num2:\n        return True\n    else:\n        return False\n```",
+      "unseen_niah": "<think>\nIn Section 04, subsystem `Sh flourPod-A7` has Verification Code `CHK-8512` and Operating Temp 3612 K.\n</think>\nSubsystem `ReactorPod-A6` MB-8512`gpucalling GPU-8512`gpugpugpu"
+    },
+    {
+      "step": 125,
+      "train_loss": 2.1249,
+      "val_loss": 2.2721,
+      "val_ppl": 9.7,
+      "tok_s": 1608.7
+    },
+    {
+      "step": 150,
+      "train_loss": 1.2767,
+      "val_loss": 2.213,
+      "val_ppl": 9.14,
+      "tok_s": 1622.2
+    },
+    {
+      "step": 175,
+      "train_loss": 1.8363,
+      "val_loss": 2.1594,
+      "val_ppl": 8.67,
+      "tok_s": 1632.4
+    },
+    {
+      "step": 200,
+      "train_loss": 1.2439,
+      "val_loss": 2.1064,
+      "val_ppl": 8.22,
+      "tok_s": 1623.5,
+      "unseen_prose": "<think>\nLet's write a clean, self-contained implementation.\n</think>\nHere's a simple Python function that checks whether a given number is even or odd:\n\n```python\ndef is_prime(n):\n    if n <= 1:\n        return False\n    for i in range(2, int(n ** 0.5) + 1):\n        if n % i == 0:\n            return False\n    return True\n\ndef is_palindrome(s):\n    s = ''.",
+      "unseen_niah": "<think>\nIn Section 04, subsystem `ShieldPod-A7` has Verification Code `CHK-3156` and Operating Temp 921 K.\n</think>\nSubsystem `ShieldPod-A7`Bit-811`gpu-817`gpu-811`gpu-8"
+    },
+    {
+      "step": 225,
+      "train_loss": 1.429,
+      "val_loss": 2.0672,
+      "val_ppl": 7.9,
+      "tok_s": 1600.4
+    },
+    {
+      "step": 250,
+      "train_loss": 1.1336,
+      "val_loss": 2.0389,
+      "val_ppl": 7.68,
+      "tok_s": 1608.9
+    },
+    {
+      "step": 275,
+      "train_loss": 1.0251,
+      "val_loss": 2.0072,
+      "val_ppl": 7.44,
+      "tok_s": 1616.3
+    },
+    {
+      "step": 300,
+      "train_loss": 1.3177,
+      "val_loss": 1.9815,
+      "val_ppl": 7.25,
+      "tok_s": 1616.4,
+      "unseen_prose": "When two or more threads be interpreted and have proper memory and memory usage, `O(1)` runs a bitwise AND `O(1)` runs a bitwise AND `O(1)` runs a bitwise AND `O(1)` runs a bitwise AND `O(1)` runs a bitwise AND `O(1)` runs a bitwise AND `O(1)`)`.\n\n### Assistant:\n<think>\nLet's implement a clean, self-contained implementation.\n</think>\n```python",
+      "unseen_niah": "<think>\nIn Section 05, subsystem `ShieldPod-A7` has Verification Code `CHK-8462` and Operating Temp 319 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp-841`**."
+    },
+    {
+      "step": 325,
+      "train_loss": 1.1312,
+      "val_loss": 1.9623,
+      "val_ppl": 7.12,
+      "tok_s": 1602.8
+    },
+    {
+      "step": 350,
+      "train_loss": 1.0438,
+      "val_loss": 1.9452,
+      "val_ppl": 6.99,
+      "tok_s": 1605.9
+    },
+    {
+      "step": 375,
+      "train_loss": 0.7738,
+      "val_loss": 1.9314,
+      "val_ppl": 6.9,
+      "tok_s": 1611.4
+    },
+    {
+      "step": 400,
+      "train_loss": 0.892,
+      "val_loss": 1.9199,
+      "val_ppl": 6.82,
+      "tok_s": 1616.2,
+      "unseen_prose": "When a base case is met, the `if __name__ == \"__main__\":` block is used to return the current state of the loop body. This is because the loop body is printed out from the top of the loop body, and the loop body is printed out from the top of the loop body.\n\nNow, let's discuss the difference between static and dynamic arrays.\n\n### Assistant:\n<think>\nLet's write a clean, self-contained implementation.\n</think>\nHere's a Python function that",
+      "unseen_niah": "<think>\nIn Section 05, subsystem `ShieldPod-A7` has Verification Code `CHK-8213` and Operating Temp 423 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **4233`**."
+    },
+    {
+      "step": 425,
+      "train_loss": 0.7379,
+      "val_loss": 1.9115,
+      "val_ppl": 6.76,
+      "tok_s": 1601.7
+    },
+    {
+      "step": 450,
+      "train_loss": 1.7023,
+      "val_loss": 1.9034,
+      "val_ppl": 6.71,
+      "tok_s": 1606.4
+    },
+    {
+      "step": 475,
+      "train_loss": 0.8358,
+      "val_loss": 1.8968,
+      "val_ppl": 6.66,
+      "tok_s": 1610.1
+    },
+    {
+      "step": 500,
+      "train_loss": 0.9046,
+      "val_loss": 1.8892,
+      "val_ppl": 6.61,
+      "tok_s": 1614.0,
+      "unseen_prose": "When a base case is met, the following rules create a clean, self-contained stack of byte files:\n\n*   **Use a stack**: If the stack is empty, the program will return the current stack size.\n*   **Use a stack size** and a stack size**\n*   **Use a stack size** and a stack size** in C++.\n*   **Use a stack size** and a stack size** in C++.\n*   **Use a stack size** and a stack size**",
+      "unseen_niah": "<think>\nIn Section 03, subsystem `ShieldPod-A7` has Verification Code `HEX-5192` and Operating Temp 864 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **864 K** and Verification Code **`HEX-5"
+    },
+    {
+      "step": 525,
+      "train_loss": 0.8858,
+      "val_loss": 1.8712,
+      "val_ppl": 6.5,
+      "tok_s": 1605.2
+    },
+    {
+      "step": 550,
+      "train_loss": 1.0529,
+      "val_loss": 1.8652,
+      "val_ppl": 6.46,
+      "tok_s": 1602.3
+    },
+    {
+      "step": 575,
+      "train_loss": 0.9232,
+      "val_loss": 1.8591,
+      "val_ppl": 6.42,
+      "tok_s": 1606.0
+    },
+    {
+      "step": 600,
+      "train_loss": 0.4494,
+      "val_loss": 1.8555,
+      "val_ppl": 6.39,
+      "tok_s": 1609.5,
+      "unseen_prose": "In C and C++, `#include` literally pastes the accounts of accounts of the last name in the binary number. If there are multiple accounts of `num` with the same number of `num`, the function returns -1.\n\nHere's a simple example:\n\n```cpp\n#include <iostream>\n#include <cstdlib>\n\nint main() {\n    int num1, num2;\n\n    std::cout << \"Enter a number: \";\n    std::cin >> num",
+      "unseen_niah": "<think>\nIn Section 04, subsystem `ShieldPod-A7` has Verification Code `CHK-8216` and Operating Temp 529 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **529 K** and Verification Code **`CHK-8"
+    },
+    {
+      "step": 625,
+      "train_loss": 1.183,
+      "val_loss": 1.8477,
+      "val_ppl": 6.35,
+      "tok_s": 1602.3
+    },
+    {
+      "step": 650,
+      "train_loss": 0.632,
+      "val_loss": 1.8462,
+      "val_ppl": 6.34,
+      "tok_s": 1602.8
+    },
+    {
+      "step": 675,
+      "train_loss": 1.176,
+      "val_loss": 1.8432,
+      "val_ppl": 6.32,
+      "tok_s": 1605.9
+    },
+    {
+      "step": 700,
+      "train_loss": 1.1044,
+      "val_loss": 1.8407,
+      "val_ppl": 6.3,
+      "tok_s": 1606.8,
+      "unseen_prose": "In C and C++, `#include` literally pastes the records in the same way but different operations\u2014y, and the corresponding calls.\n\nI made several changes to improve the clarity and flow of the text:\n\n- Changed \"it is a very important part of the process\" to \"it is a more concise and concise way to express the same idea.\"\n- Replaced \"it is a more effective way to express the same idea\" with \"it is a more effective way to express the same idea\" to",
+      "unseen_niah": "<think>\nIn Section 19, subsystem `ShieldPod-A7` has Verification Code `KEY-8234` and Operating Temp 305 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **305 K** and Verification Code **`KEY-823"
+    },
+    {
+      "step": 725,
+      "train_loss": 0.8882,
+      "val_loss": 1.8356,
+      "val_ppl": 6.27,
+      "tok_s": 1600.6
+    },
+    {
+      "step": 750,
+      "train_loss": 0.7104,
+      "val_loss": 1.8354,
+      "val_ppl": 6.27,
+      "tok_s": 1603.5
+    },
+    {
+      "step": 775,
+      "train_loss": 1.5809,
+      "val_loss": 1.8331,
+      "val_ppl": 6.25,
+      "tok_s": 1600.8
+    },
+    {
+      "step": 800,
+      "train_loss": 0.6008,
+      "val_loss": 1.8286,
+      "val_ppl": 6.23,
+      "tok_s": 1603.4,
+      "unseen_prose": "INAL-the-counter (B1): Auth Token is a type of dynamic programming that allows a simple, multi-byte resolution through an array of floats. It is a simple, self-contained loop that can be used to find all the elements in a given array.\n\nHere's a simple implementation of a binary search algorithm in Python:\n\n```python\ndef binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid =",
+      "unseen_niah": "<think>\nIn Section 04, subsystem `ShieldPod-A7` has Verification Code `CHK-8361` and Operating Temp 529 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **529 K** and Verification Code **`CHK-8"
+    },
+    {
+      "step": 825,
+      "train_loss": 0.7086,
+      "val_loss": 1.8276,
+      "val_ppl": 6.22,
+      "tok_s": 1598.3
+    },
+    {
+      "step": 850,
+      "train_loss": 0.8037,
+      "val_loss": 1.8249,
+      "val_ppl": 6.2,
+      "tok_s": 1600.9
+    },
+    {
+      "step": 875,
+      "train_loss": 0.5785,
+      "val_loss": 1.8249,
+      "val_ppl": 6.2,
+      "tok_s": 1601.4
+    },
+    {
+      "step": 900,
+      "train_loss": 0.6808,
+      "val_loss": 1.8183,
+      "val_ppl": 6.16,
+      "tok_s": 1603.8,
+      "unseen_prose": "In C and C++, `#include` literally pastes header text into a source file; if two headers include a common third header without guards, struct and inline definitions appear twice and break the One Definition Rule. Header guards (`#pragma once` or `#ifndef`) instruct the preprocessor to skip duplicate inclusions within the same translation unit.\n\nKEY headers idempotent prevents redefinition errors and cuts redundant lexing and parsing work.",
+      "unseen_niah": "<think>\nIn Section 04, subsystem `ShieldPod-A7` has Verification Code `KEY-8519` and Operating Temp 326 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **326 K** and Verification Code **`KEY-851"
+    }
+  ],
+  "phase2_clean_sft": [
+    {
+      "step": 1,
+      "train_loss": 0.7625,
+      "val_loss": 1.2403,
+      "val_ppl": 3.46,
+      "tok_s": 761.8
+    },
+    {
+      "step": 20,
+      "train_loss": 0.5962,
+      "val_loss": 1.2336,
+      "val_ppl": 3.43,
+      "tok_s": 1561.4
+    },
+    {
+      "step": 40,
+      "train_loss": 0.8164,
+      "val_loss": 1.2364,
+      "val_ppl": 3.44,
+      "tok_s": 1601.3
+    },
+    {
+      "step": 60,
+      "train_loss": 1.5027,
+      "val_loss": 1.2241,
+      "val_ppl": 3.4,
+      "tok_s": 1632.2
+    },
+    {
+      "step": 80,
+      "train_loss": 1.2388,
+      "val_loss": 1.2163,
+      "val_ppl": 3.37,
+      "tok_s": 1636.1,
+      "unseen_prose": "In C and C++, `#include` literally pastes header text into a source file; if two headers include a common third header without guards, struct and inline definitions appear twice and break the One Definition Rule. Header guards (`#pragma once` or `#ifndef`) instruct the preprocessor to skip duplicate inclusions within the same translation unit.\n\nKeeping headers idempotent prevents redefinition errors and cuts redundant lexing and parsing work.",
+      "unseen_math": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 160 miles.\n</think>\nThe probe travels **160 miles** in 4 hours.",
+      "unseen_niah": "<think>\nIn Section 04, subsystem `ShieldPod-A7` has Verification Code `SIG-5123` and Operating Temp 761 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **761 K** and Verification Code **`SIG-512"
+    },
+    {
+      "step": 100,
+      "train_loss": 1.5795,
+      "val_loss": 1.21,
+      "val_ppl": 3.35,
+      "tok_s": 1561.8
+    },
+    {
+      "step": 120,
+      "train_loss": 1.177,
+      "val_loss": 1.2115,
+      "val_ppl": 3.36,
+      "tok_s": 1573.7
+    },
+    {
+      "step": 140,
+      "train_loss": 0.1868,
+      "val_loss": 1.2005,
+      "val_ppl": 3.32,
+      "tok_s": 1589.0
+    },
+    {
+      "step": 160,
+      "train_loss": 0.7862,
+      "val_loss": 1.1983,
+      "val_ppl": 3.31,
+      "tok_s": 1595.2,
+      "unseen_prose": "In C and C++, `#include` literally pastes header text into a source file; if two headers include a common third header without guards, struct and inline definitions appear twice and break the One Definition Rule. Header guards (`#pragma once` or `#ifndef`) instruct the preprocessor to skip duplicate inclusions within the same translation unit.\n\nKeeping headers idempotent prevents redefinition errors and cuts redundant lexing and parsing work.",
+      "unseen_math": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe probe travels **180 miles** in 4 hours.",
+      "unseen_niah": "<think>\nIn Section 04, subsystem `ShieldPod-A7` has Verification Code `KEY-3561` and Operating Temp 298 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **298 K** and Verification Code **`KEY-356"
+    },
+    {
+      "step": 180,
+      "train_loss": 0.8325,
+      "val_loss": 1.1975,
+      "val_ppl": 3.31,
+      "tok_s": 1559.0
+    },
+    {
+      "step": 200,
+      "train_loss": 0.401,
+      "val_loss": 1.1943,
+      "val_ppl": 3.3,
+      "tok_s": 1566.5
+    },
+    {
+      "step": 220,
+      "train_loss": 0.4231,
+      "val_loss": 1.1914,
+      "val_ppl": 3.29,
+      "tok_s": 1573.4
+    },
+    {
+      "step": 240,
+      "train_loss": 0.7716,
+      "val_loss": 1.1928,
+      "val_ppl": 3.3,
+      "tok_s": 1578.8,
+      "unseen_prose": "In C and C++, `#include` literally pastes header text into a source file; if two headers include a common third header without guards, struct and inline definitions appear twice and break the One Definition Rule. Header guards (`#pragma once` or `#ifndef`) instruct the preprocessor to skip duplicate inclusions within the same translation unit.\n\nKeeping headers idempotent prevents redefinition errors and cuts redundant lexing and parsing work.",
+      "unseen_math": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe probe travels **180 miles** in 4 hours.",
+      "unseen_niah": "<think>\nIn Section 04, subsystem `ShieldPod-A7` has Verification Code `SIG-9325` and Operating Temp 618 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **618 K** and Verification Code **`SIG-932"
+    },
+    {
+      "step": 260,
+      "train_loss": 0.9488,
+      "val_loss": 1.1921,
+      "val_ppl": 3.29,
+      "tok_s": 1559.1,
+      "unseen_prose": "In C and C++, `#include` literally pastes header text into a source file; if two headers include a common third header without guards, struct and inline definitions appear twice and break the One Definition Rule. Header guards (`#pragma once` or `#ifndef`) instruct the preprocessor to skip duplicate inclusions within the same translation unit.\n\nKeeping headers idempotent prevents redefinition errors and cuts redundant lexing and parsing work.",
+      "unseen_math": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe probe travels **180 miles** in 4 hours.",
+      "unseen_niah": "<think>\nIn Section 04, subsystem `ShieldPod-A7` has Verification Code `SIG-3921` and Operating Temp 658 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **658 K** and Verification Code **`SIG-392"
+    }
+  ]
+}

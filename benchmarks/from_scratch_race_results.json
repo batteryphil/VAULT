@@ -1,0 +1,48 @@
+{
+  "round1_language": {
+    "transformer": {
+      "params": 3672320,
+      "ppl_0": 485165195.41,
+      "ppl_50": 97341.31,
+      "ppl_100": 1292.15,
+      "ppl_150": 590.75,
+      "time_sec": 5.47
+    },
+    "linear_ssm": {
+      "params": 3672320,
+      "ppl_0": 485165195.41,
+      "ppl_50": 100128.84,
+      "ppl_100": 1236.07,
+      "ppl_150": 625.53,
+      "time_sec": 6.05
+    },
+    "vault": {
+      "params": 3973464,
+      "ppl_0": 485165195.41,
+      "ppl_50": 87648.94,
+      "ppl_100": 1400.24,
+      "ppl_150": 461.45,
+      "time_sec": 14.19
+    }
+  },
+  "round2_associative_recall": {
+    "transformer": {
+      "acc_50": 4.4,
+      "acc_100": 61.2,
+      "acc_200": 99.4,
+      "final_query_loss": 0.0489
+    },
+    "linear_ssm": {
+      "acc_50": 1.9,
+      "acc_100": 1.9,
+      "acc_200": 1.6,
+      "final_query_loss": 5.0797
+    },
+    "vault": {
+      "acc_50": 2.5,
+      "acc_100": 23.1,
+      "acc_200": 85.3,
+      "final_query_loss": 0.8531
+    }
+  }
+}

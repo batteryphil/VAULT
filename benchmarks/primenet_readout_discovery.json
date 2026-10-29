@@ -1,0 +1,12 @@
+{
+  "mse_single_bank": 0.9387415920885942,
+  "mse_linear_mean": 0.2459689298116585,
+  "mse_median_pair": 0.04286267880653482,
+  "mse_prec_weight": 0.0007090972774718231,
+  "mse_harm_cons": 0.0057084820770502065,
+  "primenet_best_sympy": "0.99963*X4 + 0.00045",
+  "primenet_test_r2": 0.9994559747251179,
+  "primenet_test_mse": 0.0007080086607411831,
+  "snr_gain_vs_single_bank": 1325.8899843200604,
+  "snr_gain_vs_linear_mean": 347.40949292084144
+}

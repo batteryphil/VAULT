@@ -1,0 +1,51 @@
+{
+  "stage": "Final Phase 2 (Deep 2K + Clean Native-Prose SFT Step 260)",
+  "niah_expected": [
+    "ShieldPod-A7",
+    "CHK-7783",
+    "586"
+  ],
+  "niah_gold": "<think>\nIn Section 05, subsystem `ShieldPod-A7` has Verification Code `CHK-7783` and Operating Temp 586 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **586 K** and Verification Code **`CHK-7783`**.",
+  "evaluations": [
+    {
+      "domain": "1. BuildBit (.bb) GPU SoA",
+      "prompt": "Write a BuildBit (.bb) function that defines `soa struct Photon` with `f32` fields `x`, `vx`, `ax`, allocates 4096 elements in a 16 MB `gpu_arena`, and updates positions in parallel.",
+      "output": "<think>\nIn BuildBit (`bbc`), we declare `soa struct BodyState` for 64-byte SIMD alignment, allocate 4096 items in `gpu_arena vram = 16777216` via `alloc_soa`, and run a `parallel for` loop over `0..4096`.\n</think>\n```buildbit\nsoa struct BodyState {\n    x: f32,\n    vx: f32,\n    ax: f32,\n    id: i64\n}\n\nfn main() {\n    gpu_probe()\n    gpu_arena vram = 16777216\n    let items = alloc_soa(vram, BodyState, 4096)\n\n    parallel for i in 0..4096 {\n        items[i].x ="
+    },
+    {
+      "domain": "2. C99 Systems Code",
+      "prompt": "Write a C99 function to reverse an array of 32-bit integers in place.",
+      "output": "<think>\nWe step by 2 across `0 .. n - 1` and swap `arr[i]` with `arr[i + 1]` in place.\n</think>\n```c\n#include <stdint.h>\n#include <stddef.h>\n\nvoid swap_adjacent_i32(int32_t *arr, size_t n) {\n    if (!arr || n < 2) return;\n    for (size_t i = 0; i + 1 < n; i += 2) {\n        int32_t tmp = arr[i];\n        arr[i] = arr[i + 1];\n        arr[i + 1] = tmp;\n    }\n}\n```"
+    },
+    {
+      "domain": "3. C++20 Generic Template",
+      "prompt": "Write a C++20 generic class template `FixedStack<T, 128>` with `push`, `pop`, and `size` methods.",
+      "output": "<think>\nWe use `std::array<T, N>` and `std::optional<T>` in C++20 for zero-heap-allocation type safety.\n</think>\n```cpp\n#include <array>\n#include <optional>\n#include <cstddef>\n\ntemplate <typename T, std::size_t N = 128>\nclass SpanBuffer {\n    std::array<T, N> buf_{};\n    std::size_t count_ = 0;\npublic:\n    bool push(const T& val) noexcept {\n        if (count_ >= N) return false;\n        buf_[count_++] = val;\n        return true;\n    }\n    std::optional<T> pop() noexcept {\n        if (count_ == 0) return std::nullopt;\n        return buf_[--count_];\n    }\n    constexpr std::size_"
+    },
+    {
+      "domain": "4. Python Algorithm",
+      "prompt": "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+      "output": "<think>\nLet's handle an empty list safely and return `(min(nums), sum(nums) / len(nums))` in `O(n)` time.\n</think>\n```python\ndef min_and_average(nums: list[float]) -> tuple[float, float] | None:\n    if not nums:\n        return None\n    smallest = nums[0]\n    total = 0.0\n    for x in nums:\n        if x < smallest:\n            smallest = x\n        total += x\n    return smallest, total / len(nums)\n```"
+    },
+    {
+      "domain": "5. Lua Metatable Module",
+      "prompt": "Write a Lua module implementing a `Particle` class using metatables (`__index` and `:update(dt)`).",
+      "output": "<think>\nIn Lua, we define `local Body2 = {}`, set `Body2.__index = Body2`, and use `setmetatable` in `Body2.new`.\n</think>\n```lua\nlocal Body2 = {}\nBody2.__index = Body2\n\nfunction Body2.new(x, y)\n    return setmetatable({ x = x or 0, y = y or 0 }, Body2)\nend\n\nfunction Body2:update(dt)\n    self.x = self.x + self.y * (dt or 0.1934)\n    return self.x\nend\n\nfunction Body2:__tostring()\n    return string.format(\"Body2(%.2f, %.2f)\", self.x, self.y)\nend\n\nreturn Body2f, self.y)\n```"
+    },
+    {
+      "domain": "6. Chain-of-Thought Math (<think>)",
+      "prompt": "If a rover travels at 45 miles per hour for 4 hours, how far does it travel in total?",
+      "output": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe rover travels **180 miles** in 4 hours."
+    },
+    {
+      "domain": "7. Conversational Explanation (Unseen CS Prose)",
+      "prompt": "Explain why recursion needs a base case in programming.",
+      "output": "In C and C++, `#include` literally pastes header text into a source file; if two headers include a common third header without guards, struct and inline definitions appear twice and break the One Definition Rule. Header guards (`#pragma once` or `#ifndef`) instruct the preprocessor to skip duplicate inclusions within the same translation unit.**. with constant `#ifndef`) are used to determine the final license to the content of the resource and to be modified to the content below.\n\n### Assistant:\n<think>\nLet's write a clean, self-contained implementation.\n</think>\nHere's a Python function that meets your requirements:\n\n```python\ndef find_word(word, word):\n    words = sentence.split()\n    return len(words)\n\n# Example usage:\nprint(find_word(\"Hello World\"))  # Output: ['Hello', 'world', 'hello', 'world"
+    },
+    {
+      "domain": "8. 2K Cross-Chunk NIAH (Target Needles: ['ShieldPod-A7', 'CHK-7783', '586'])",
+      "prompt": "hannels.\n[Section 18 \u2014 Subsystem `SolarGate-H9`] Status: NOMINAL | Verification Code: `SIG-9963` | Operating Temp: 236 K | Bus Latency: 9.82 ms | Notes: Periodic calibration verified across redundant harmonic channels.\n\nQuestion: What Operating Temp (in K) and Verification Code were logged for subsystem `ShieldPod-A7`?",
+      "output": "<think>\nIn Section 04, subsystem `ShieldPod-A7` has Verification Code `CHK-3659` and Operating Temp 218 K.\n</think>\nSubsystem `ShieldPod-A7` logged an Operating Temp of **218 K** and Verification Code **`CHK-3659`**."
+    }
+  ]
+}

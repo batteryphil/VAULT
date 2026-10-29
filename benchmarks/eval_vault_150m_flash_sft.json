@@ -1,0 +1,45 @@
+{
+  "sft_step": 240,
+  "evaluations": [
+    {
+      "domain": "1. BuildBit (.bb) GPU SoA",
+      "prompt": "Write a BuildBit (.bb) function that defines `soa struct Photon` with `f32` fields `x`, `vx`, `ax`, allocates 4096 elements in a 16 MB `gpu_arena`, and updates positions in parallel.",
+      "output": "<think>\nIn BuildBit (`bbc`), we declare `soa struct WavePacket` for 64-byte SIMD alignment, allocate 4096 items in `gpu_arena vram = 1677721`, `alloc_soa(vram, WavePacket, 4096)`, and integrates `mint` by adding `ax` in parallel.\n\n### Assistant:\n<think>\nIn BuildBit (`bbc`), we declare `soa struct WavePacket` for 64-byte SIMD alignment, allocate 4096 items in `gpu_arena vram = 4194304` via `alloc_soa`, and execute a `parallel for` loop over `0..4096`.\n</think>\n```buildbit\nsoa struct WavePacket {\n    pos: f"
+    },
+    {
+      "domain": "2. C99 Systems Code",
+      "prompt": "Write a C99 function to reverse an array of 32-bit integers in place.",
+      "output": "<think>\nUsing `restrict` pointers in C99 of 32-bit integers in parallel.\n</think>\nThe input array will be: [1, 2, 3, 4, 5]\n</think>\n```"
+    },
+    {
+      "domain": "3. C++20 Generic Template",
+      "prompt": "Write a C++20 generic class template `FixedStack<T, 128>` with `push`, `pop`, and `size` methods.",
+      "output": "<think>\nUsing `std::array<T, N>` and `std::optional<T>` provides zero-heap-allocation storage and type-safe `pop()` semantics in C++20.\n</think>\n```cpp\n#include <array>\n#include <optional>\n#include <cstddef>\n\ntemplate <typename T, std::size_t N = 128>\nclass BoundedBuffer {\n    std::array<T, N> data_{};\n    std::size_t len_ = 0;\npublic:\n    bool push(const T& item) noexcept {\n        if (len_ >= N) return false;\n        data_[len_++] = item;\n        return true;\n    }\n    std::optional<T> pop() noexcept {\n        if (len_ == 0) return std::nullopt;\n        return data_[--len_];\n    }"
+    },
+    {
+      "domain": "4. Python Algorithm",
+      "prompt": "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+      "output": "<think>\nThe user wants a Python implementation. Let's handle edge cases cleanly and write idiomatic, readable Python.\n</think>\n```python\ndef find_max(numbers):\n    max_num = numbers[0]\n    for num in numbers:\n        if num < min_num:\n            max_num = num\n        else:\n            max_num = num\n        if num > max_num:\n            max_num = num\n    return max_num\n\nprint(find_max_num([1, 2, 3, 4, 5])) # Output: 5"
+    },
+    {
+      "domain": "5. Lua Metatable Module",
+      "prompt": "Write a Lua module implementing a `Particle` class using metatables (`__index` and `:update(dt)`).",
+      "output": "<think>\nIn Lua, we create `local Particle = {}`, set `Particle.__index = Particle`, and attach the metatable inside `Particle.new`.\n</think>\n```lua\nlocal Particle = {}\nParticle.__index = Particle\n\nfunction Particle.new(val, rate)\n    return setmetatable({ val = val or 0, rate = rate or 1.50 }, Particle)\nend\n\nfunction Particle:step(dt)\n    self.val = self.val + self.rate * (dt or 0.0764)\n    return self.val\nend\n\nreturn Particle\n```"
+    },
+    {
+      "domain": "6. Chain-of-Thought Math (<think>)",
+      "prompt": "If a rover travels at 45 miles per hour for 4 hours, how far does it travel in total?",
+      "output": "<think>\nDistance equals speed multiplied by time:\n12 mph * 4 hours = 48 miles.\n</think>\nThe rover travels **48 miles** in 4 hours."
+    },
+    {
+      "domain": "7. Conversational Explanation (Unseen Prose Test)",
+      "prompt": "Explain why recursion needs a base case in programming.",
+      "output": "<think>\nLet's plan the algorithm, verify its time and space complexity, and implement a clean Python function.\n</think>\n```python\ndef binary_search(arr, target):\n    left = 0\n    right = len(arr) - 1\n\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1\n\n# Example usage:\narr = [4, 5, 6, 8, 9, 10]\ntarget = 5\n\nprint(find_first_first_five_even(arr))\n```"
+    },
+    {
+      "domain": "8. Long-Context Cross-Chunk NIAH (18 Sections)",
+      "prompt": "Below is a multi-section systems telemetry log. Read all sections carefully and answer the question at the end.\n\n[Section 01 \u2014 Subsystem `Laserbus-H5`] Status: NOMINAL | Verification Code: `HEX-5004` | Operating Temp: 271 K | Bus Latency: 6.46 ms | Notes: Periodic calibration verified across redundant harmonic channels",
+      "output": "<think>\nLocating subsystem ` thumbnailPod-Y3` in Section 10 of the log: Verification Code = `CHK-9520`, Operating Temp = 680 K.\n</think>\nSubsystem `candPod-Ox-R2` logged an Operating-400 K."
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "stage": "Final Stage 2 (Contrastive + Replay + 2K NIAH Step 240)",
+  "niah_expected": [
+    "ThermalRing-J3",
+    "KEY-6049"
+  ],
+  "niah_gold": "<think>\nScanning the telemetry log for subsystem `ThermalRing-J3` (Section 12): Verification Code is `KEY-6049` and Operating Temp is 684 K.\n</think>\nThe Verification Code for subsystem `ThermalRing-J3` is **`KEY-6049`**.",
+  "evaluations": [
+    {
+      "domain": "1. BuildBit (.bb) GPU SoA",
+      "prompt": "Write a BuildBit (.bb) function that defines `soa struct Photon` with `f32` fields `x`, `vx`, `ax`, allocates 4096 elements in a 16 MB `gpu_arena`, and updates positions in parallel.",
+      "output": "<think>\nThe given code is correct. Please provide a simple example of how to use `v1` for a specific type of loop.\n</think>\n```cpp\n#include <iostream>\n#include <vector>\n#include <algorithm>\n#include <string>\n#include <cstdlib.h>\n\nvoid print_array(const std::vector<int>& arr) {\n    std::vector<int> numbers = {2, 3, 4, 5};\n    std::vector<int> numbers.size();\n\n    // Create an empty list to store the numbers\n    int sum = 0;\n    while (num > 0) {\n        sum += num % 10;\n        numbers.push(num);\n    }\n\n    // Add the numbers in the array\n    int sum = numbers.size();\n    int sum = numbers[0];\n    int sum = numbers[1];"
+    },
+    {
+      "domain": "2. C99 Systems Code",
+      "prompt": "Write a C99 function to reverse an array of 32-bit integers in place.",
+      "output": "<think>\nWe use two indices `i = 0` and `j = n - 1` and swap `arr[i]` and `arr[j]` until `i >= j`.\n</think>\n```c\n#include <stdint.h>\n#include <stddef.h>\n\nvoid reverse_i32(int32_t *arr, size_t n) {\n    if (!arr || n < 2) return;\n    size_t i = 0, j = n - 1;\n    while (i < j) {\n        int32_t tmp = arr[i];\n        arr[i] = arr[j];\n        arr[j] = tmp;\n        ++i;\n        --j;\n    }\n}\n```"
+    },
+    {
+      "domain": "3. C++20 Generic Template",
+      "prompt": "Write a C++20 generic class template `FixedStack<T, 128>` with `push`, `pop`, and `size` methods.",
+      "output": "<think>\nWe use `std::array<T, N>` and `std::optional<T>` in C++20 for zero-heap-allocation type safety.\n</think>\n```cpp\n#include <array>\n#include <optional>\n#include <cstddef>\n\ntemplate <typename T, std::size_t N = 128>\nclass SpanBuffer {\n    std::array<T, N> buf_{};\n    std::size_t count_ = 0;\npublic:\n    bool push(const T& val) noexcept {\n        if (count_ >= N) return false;\n        buf_[count_++] = val;\n        return true;\n    }\n    std::optional<T> pop() noexcept {\n        if (count_ == 0) return std::nullopt;\n        return buf_[--count_];\n    }\n    std::size_t size"
+    },
+    {
+      "domain": "4. Python Algorithm",
+      "prompt": "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+      "output": "<think>\nThe function call `find_max_element(lst, target) -> List[int]` takes an array of numbers and returns the maximum element.\n\nHere's a simple example:\n\n```python\nnumbers = [1, 2, 3, 4, 5]\nmax_element = 4\n\nprint(\"The maximum element is\", max_element, \"is\", max_element, \"is\", max_element, \"is\", max_element)\n\n### Assistant:\n<think>\nThe maximum element is 60 seconds, meaning it's already set to 100 seconds.\n</think>\nThe output of the code is: \n100 seconds\n100 seconds"
+    },
+    {
+      "domain": "5. Lua Metatable Module",
+      "prompt": "Write a Lua module implementing a `Particle` class using metatables (`__index` and `:update(dt)`).",
+      "output": "<think>\nIn Lua, we define `local Particle = {}`, set `Particle.__index = Particle`, and use `setmetatable` in `Particle.new`.\n</think>\n```lua\nlocal Particle = {}\nParticle.__index = Particle\n\nfunction Particle.new(x, y)\n    return setmetatable({ x = x or 0, y = y or 0 }, Particle)\nend\n\nfunction Particle:update(dt)\n    self.x = self.x + self.y * (dt or 0.1876)\n    return self.x\nend\n\nfunction Particle:__tostring()\n    return string.format(\"Particle(%.2f, %.2f)\", self.x, self.y)\nend\n\nreturn Particle\n```"
+    },
+    {
+      "domain": "6. Chain-of-Thought Math (<think>)",
+      "prompt": "If a rover travels at 45 miles per hour for 4 hours, how far does it travel in total?",
+      "output": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe rover travels **180 miles** in 4 hours."
+    },
+    {
+      "domain": "7. Conversational Explanation (Unseen CS Prose)",
+      "prompt": "Explain why recursion needs a base case in programming.",
+      "output": "<think>\nThe given code is correct, but there are a few areas where the code can be improved. Here's a revised version:\n\n```python\ndef find_repeating_elements(arr):\n    return [x for x in arr if x > 0] for i in arr if x % 2 == 0]\n```"
+    },
+    {
+      "domain": "8. 2K Cross-Chunk NIAH (Target Needles: ['ThermalRing-J3', 'KEY-6049'])",
+      "prompt": "ant harmonic channels.\n[Section 18 \u2014 Subsystem `SolarGate-H9`] Status: NOMINAL | Verification Code: `SIG-9963` | Operating Temp: 236 K | Bus Latency: 9.82 ms | Notes: Periodic calibration verified across redundant harmonic channels.\n\nQuestion: What is the exact Verification Code reported for subsystem `ThermalRing-J3`?",
+      "output": "<think>\nThe given code is correct and follows the same result as the original code. Here's a revised version of the code with some suggested improvements:\n\n```python\nimport random\n\n# Create a random number between 0 and 100\nrandom_number = random.randint(1, 100)\n\n# Create a random number between 1 and 100\nrandom_number = random.randint(1, 100)\n\n# Create a random number between 1 and 100\nrandom_number = random.randint(1, 100)\n\n# Create a random number between 1 and 100\nrandom_number = random.randint(1, 100)\n\n# Create a random number between 1 and 100\nrandom_number = random.randint(1, 100)\n\nprint(\"The random"
+    }
+  ]
+}

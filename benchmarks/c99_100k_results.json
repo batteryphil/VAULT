@@ -1,0 +1,18 @@
+{
+  "horizons": [
+    {"T": 100, "linear_elu": 0.11225, "gist_exp": 0.23556, "prime_moment": 0.08061, "dense_rls": -0.00728, "vault_cos": 0.99999, "vault_top1_pct": 100.00},
+    {"T": 500, "linear_elu": 0.05005, "gist_exp": 0.07156, "prime_moment": 0.04427, "dense_rls": 0.01076, "vault_cos": 0.99997, "vault_top1_pct": 100.00},
+    {"T": 1000, "linear_elu": 0.03614, "gist_exp": 0.04735, "prime_moment": 0.03127, "dense_rls": 0.01234, "vault_cos": 0.99996, "vault_top1_pct": 100.00},
+    {"T": 2000, "linear_elu": 0.03357, "gist_exp": 0.03730, "prime_moment": 0.03274, "dense_rls": -0.00309, "vault_cos": 0.99981, "vault_top1_pct": 100.00},
+    {"T": 4000, "linear_elu": 0.03271, "gist_exp": 0.02907, "prime_moment": 0.03187, "dense_rls": -0.04327, "vault_cos": 0.99895, "vault_top1_pct": 100.00},
+    {"T": 8000, "linear_elu": 0.02952, "gist_exp": 0.03092, "prime_moment": 0.02811, "dense_rls": -0.03864, "vault_cos": 0.99292, "vault_top1_pct": 100.00},
+    {"T": 16000, "linear_elu": 0.02278, "gist_exp": 0.02077, "prime_moment": 0.02252, "dense_rls": 0.00188, "vault_cos": 0.97996, "vault_top1_pct": 100.00},
+    {"T": 32000, "linear_elu": 0.03104, "gist_exp": 0.02955, "prime_moment": 0.03032, "dense_rls": -0.02851, "vault_cos": 0.97308, "vault_top1_pct": 100.00},
+    {"T": 64000, "linear_elu": 0.02962, "gist_exp": 0.02822, "prime_moment": 0.02903, "dense_rls": -0.00475, "vault_cos": 0.96234, "vault_top1_pct": 95.83},
+    {"T": 100000, "linear_elu": 0.02478, "gist_exp": 0.02438, "prime_moment": 0.02461, "dense_rls": -0.01463, "vault_cos": 0.96453, "vault_top1_pct": 100.00}
+  ],
+  "c99_tok_per_sec": 172476.5,
+  "c99_us_per_tok": 5.7979,
+  "skip_pct": 99.96,
+  "state_kb": 1160.34
+}

@@ -1,0 +1,94 @@
+{
+  "model_id": "HuggingFaceTB/SmolLM-135M",
+  "converted_layers": 24,
+  "total_layers": 30,
+  "total_params": 134749608,
+  "trainable_params": 8062056,
+  "teacher_val_ppl": 9.01451737176735,
+  "prime_moment_zero_shot_ppl": 485165195.4097903,
+  "vault_zero_shot_ppl": 245.8006355361558,
+  "vault_aligned_ppl": 35.25586669498644,
+  "alignment_time_sec": 53.55182837485336,
+  "training_history": [
+    {
+      "step": 0,
+      "val_ppl": 245.8006355361558
+    },
+    {
+      "step": 20,
+      "ce_loss": 4.184634208679199,
+      "kl_loss": 380.0263977050781,
+      "val_ppl": 51.8642865855922,
+      "mean_vault_gate": 0.14941457162300745,
+      "elapsed_sec": 10.993753694929183
+    },
+    {
+      "step": 40,
+      "ce_loss": 3.855252742767334,
+      "kl_loss": 313.0814514160156,
+      "val_ppl": 43.44723600285492,
+      "mean_vault_gate": 0.14831027574837208,
+      "elapsed_sec": 21.63682432891801
+    },
+    {
+      "step": 60,
+      "ce_loss": 3.9258971214294434,
+      "kl_loss": 294.1519470214844,
+      "val_ppl": 36.311582718811955,
+      "mean_vault_gate": 0.1477095279842615,
+      "elapsed_sec": 32.221865793922916
+    },
+    {
+      "step": 80,
+      "ce_loss": 3.8696327209472656,
+      "kl_loss": 282.622314453125,
+      "val_ppl": 35.197212466915204,
+      "mean_vault_gate": 0.14734774517516294,
+      "elapsed_sec": 42.880941544892266
+    },
+    {
+      "step": 100,
+      "ce_loss": 3.6438405513763428,
+      "kl_loss": 269.7395324707031,
+      "val_ppl": 35.25586669498644,
+      "mean_vault_gate": 0.14716821784774461,
+      "elapsed_sec": 53.55161791294813
+    }
+  ],
+  "generations": {
+    "Once upon a time, in a quiet village, a young inventor built a": "Once upon a time, in a quiet village, a young inventor built a small town where a village with a town called thein a village. It is a small town called a place called the town. Everywhere, the town was a beautiful town, there was a big town called the town called",
+    "Lily found a shiny golden key under the old oak tree. She picked it up and": "Lily found a shiny golden key under the old oak tree. She picked it up and looked at the shiny rock. \"Wow, I'm so happy! I've got a little bit. It is the best thing for you!\n\nYou have to do something that you should know how to do.\n"
+  },
+  "long_horizon_passkey_recall": [
+    {
+      "seq_len": 256,
+      "needle_pos": 25,
+      "linear_elu_cosine": 0.13531360030174255,
+      "vault_cosine": 0.9599274396896362
+    },
+    {
+      "seq_len": 512,
+      "needle_pos": 51,
+      "linear_elu_cosine": 0.09672077000141144,
+      "vault_cosine": 0.9555506706237793
+    },
+    {
+      "seq_len": 1024,
+      "needle_pos": 102,
+      "linear_elu_cosine": 0.04953927546739578,
+      "vault_cosine": 0.8728998899459839
+    },
+    {
+      "seq_len": 2048,
+      "needle_pos": 204,
+      "linear_elu_cosine": 0.03185367211699486,
+      "vault_cosine": 0.8069589138031006
+    },
+    {
+      "seq_len": 4096,
+      "needle_pos": 409,
+      "linear_elu_cosine": 0.017245016992092133,
+      "vault_cosine": 0.7321242094039917
+    }
+  ]
+}

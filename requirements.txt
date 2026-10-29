@@ -1,0 +1,7 @@
+torch>=2.4.0
+triton>=3.1.0
+numpy>=1.26.0
+transformers>=4.44.0
+pyarrow>=15.0.0
+datasets>=2.20.0
+huggingface_hub>=0.24.0

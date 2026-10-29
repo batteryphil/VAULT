@@ -1,0 +1,50 @@
+{
+  "stage": "After Stage 1 (L=2048 Pretrain Step 220)",
+  "niah_expected": [
+    "ThermalRing-J3",
+    "KEY-6049"
+  ],
+  "niah_gold": "<think>\nScanning the telemetry log for subsystem `ThermalRing-J3` (Section 12): Verification Code is `KEY-6049` and Operating Temp is 684 K.\n</think>\nThe Verification Code for subsystem `ThermalRing-J3` is **`KEY-6049`**.",
+  "evaluations": [
+    {
+      "domain": "1. BuildBit (.bb) GPU SoA",
+      "prompt": "Write a BuildBit (.bb) function that defines `soa struct Photon` with `f32` fields `x`, `vx`, `ax`, allocates 4096 elements in a 16 MB `gpu_arena`, and updates positions in parallel.",
+      "output": "<think>\nIn BuildBit (`bbc`), we declare `soa struct WaveTask` for 64-byte SIMD alignment, allocate 4096 items in `gpu_arena vram = 16777216` via `alloc_soa`, and run a `parallel for` loop over `0..4096`.\n</think>\n```buildbit\nsoa struct WaveTask {\n    x: f32,\n    vx: f32,\n    ax: f32,\n    id: i64\n}\n\nfn main() {\n    gpu_probe()\n    gpu_arena vram = 134217728\n    let items = alloc_soa(vram, WaveTask, 4096)\n\n    parallel for i in 0..4096 {\n        items[i].pos"
+    },
+    {
+      "domain": "2. C99 Systems Code",
+      "prompt": "Write a C99 function to reverse an array of 32-bit integers in place.",
+      "output": "<think>\nWe use two indices `i = 0` and `j = n - 1` and swap `arr[i]` and `arr[j]` until `i >= j`.\n</think>\n```c\n#include <stdint.h>\n#include <stddef.h>\n\nvoid reverse_i32(int32_t *arr, size_t n) {\n    if (!arr || n < 2) return;\n    size_t i = 0, j = n - 1;\n    while (i < j) {\n        int32_t tmp = arr[i];\n        arr[i] = arr[j];\n        arr[j] = tmp;\n        ++i;\n        --j;\n    }\n}\n```"
+    },
+    {
+      "domain": "3. C++20 Generic Template",
+      "prompt": "Write a C++20 generic class template `FixedStack<T, 128>` with `push`, `pop`, and `size` methods.",
+      "output": "<think>\nWe use `std::array<T, N>` and `std::optional<T>` in C++20 for zero-heap-allocation type safety.\n</think>\n```cpp\n#include <array>\n#include <optional>\n#include <cstddef>\n\ntemplate <typename T, std::size_t N = 128>\nclass SpanBuffer {\n    std::array<T, N> buf_{};\n    std::size_t count_ = 0;\npublic:\n    bool push(const T& val) noexcept {\n        if (count_ >= N) return false;\n        buf_[count_++] = val;\n        return true;\n    }\n    std::optional<T> pop() noexcept {\n        if (count_ == 0) return std::nullopt;\n        return buf_[--count_];\n    }\n    std::size_t size"
+    },
+    {
+      "domain": "4. Python Algorithm",
+      "prompt": "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+      "output": "<think>\nLet's solve this coding problem step by step.\n</think>\ndef find_max(nums):\n    if nums:\n        return max(nums)\n    else:\n        return None"
+    },
+    {
+      "domain": "5. Lua Metatable Module",
+      "prompt": "Write a Lua module implementing a `Particle` class using metatables (`__index` and `:update(dt)`).",
+      "output": "<think>\nIn Lua, we define `local Particle = {}`, set `Particle.__index = Particle`, and use `setmetatable` in `Particle.new`.\n</think>\n```lua\nlocal Particle = {}\nParticle.__index = Particle\n\nfunction Particle.new(x, y)\n    return setmetatable({ x = x or 0, y = y or 0 }, Particle)\nend\n\nfunction Particle:update(dt)\n    self.x = self.x + self.y * (dt or 0.1876)\n    return self.x\nend\n\nfunction Particle:__tostring()\n    return string.format(\"Particle(%.2f, %.2f)\", self.x, self.y)\nend\n\nreturn Vec2\n```"
+    },
+    {
+      "domain": "6. Chain-of-Thought Math (<think>)",
+      "prompt": "If a rover travels at 45 miles per hour for 4 hours, how far does it travel in total?",
+      "output": "<think>\nDistance equals speed multiplied by time:\nDistance = 45 mph * 4 hours = 180 miles.\n</think>\nThe rover travels **180 miles** in 4 hours."
+    },
+    {
+      "domain": "7. Conversational Explanation (Unseen CS Prose)",
+      "prompt": "Explain why recursion needs a base case in programming.",
+      "output": "<think>\nLet's solve this coding problem step by step.\n</think>\nThe code snippet is correct and does not handle the case when the input is not found in the list."
+    },
+    {
+      "domain": "8. 2K Cross-Chunk NIAH (Target Needles: ['ThermalRing-J3', 'KEY-6049'])",
+      "prompt": "ant harmonic channels.\n[Section 18 \u2014 Subsystem `SolarGate-H9`] Status: NOMINAL | Verification Code: `SIG-9963` | Operating Temp: 236 K | Bus Latency: 9.82 ms | Notes: Periodic calibration verified across redundant harmonic channels.\n\nQuestion: What is the exact Verification Code reported for subsystem `ThermalRing-J3`?",
+      "output": "<think>\nIn the given example, the `h1` and `h2` to the `h1` and `h2` to the `h2` section. The `h1` section represents the type of the `h1` section and the `h2` section. The `h2` section contains the type of the `h2` section, and the `h2` section contains the type of the `h2` section where the `h2` section is stored in the `h2` section is specified in the `h2` section."
+    }
+  ]
+}

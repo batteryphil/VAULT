@@ -1,0 +1,178 @@
+{
+  "gpu": "AMD Radeon RX 9060 XT",
+  "kernel_train_scaling": [
+    {
+      "seq_len": 512,
+      "batch_size": 4,
+      "eager_vault": {
+        "status": "ok",
+        "ms": 10.75,
+        "tok_s": 190432.5,
+        "peak_mb": 467.2
+      },
+      "eager_attn": {
+        "status": "ok",
+        "ms": 2.33,
+        "tok_s": 877247.9,
+        "peak_mb": 263.5
+      },
+      "flash_vault_g4": {
+        "status": "ok",
+        "ms": 96.47,
+        "tok_s": 21229.0,
+        "peak_mb": 567.3
+      }
+    },
+    {
+      "seq_len": 2048,
+      "batch_size": 4,
+      "eager_vault": {
+        "status": "ok",
+        "ms": 165.49,
+        "tok_s": 49500.6,
+        "peak_mb": 4880.8
+      },
+      "eager_attn": {
+        "status": "ok",
+        "ms": 38.04,
+        "tok_s": 215335.6,
+        "peak_mb": 1753.0
+      },
+      "flash_vault_g4": {
+        "status": "ok",
+        "ms": 383.95,
+        "tok_s": 21336.4,
+        "peak_mb": 1813.2
+      }
+    },
+    {
+      "seq_len": 8192,
+      "batch_size": 1,
+      "eager_vault": {
+        "status": "OOM",
+        "ms": null,
+        "tok_s": null,
+        "peak_mb": null
+      },
+      "eager_attn": {
+        "status": "ok",
+        "ms": 160.88,
+        "tok_s": 50921.1,
+        "peak_mb": 6421.0
+      },
+      "flash_vault_g4": {
+        "status": "ok",
+        "ms": 385.52,
+        "tok_s": 21249.5,
+        "peak_mb": 1813.2
+      }
+    },
+    {
+      "seq_len": 32768,
+      "batch_size": 1,
+      "eager_vault": {
+        "status": "OOM (>16GB)",
+        "ms": null,
+        "tok_s": null,
+        "peak_mb": null
+      },
+      "eager_attn": {
+        "status": "OOM (>16GB)",
+        "ms": null,
+        "tok_s": null,
+        "peak_mb": null
+      },
+      "flash_vault_g4": {
+        "status": "ok",
+        "ms": 1549.29,
+        "tok_s": 21150.3,
+        "peak_mb": 6793.8
+      }
+    },
+    {
+      "seq_len": 65536,
+      "batch_size": 1,
+      "eager_vault": {
+        "status": "OOM (>16GB)",
+        "ms": null,
+        "tok_s": null,
+        "peak_mb": null
+      },
+      "eager_attn": {
+        "status": "OOM (>16GB)",
+        "ms": null,
+        "tok_s": null,
+        "peak_mb": null
+      },
+      "flash_vault_g4": {
+        "status": "ok",
+        "ms": 3092.01,
+        "tok_s": 21195.3,
+        "peak_mb": 13434.5
+      }
+    }
+  ],
+  "module_train_scaling": [
+    {
+      "seq_len": 2048,
+      "batch_size": 2,
+      "eager_mod": {
+        "status": "ok",
+        "ms": 187.46,
+        "tok_s": 21850.5,
+        "peak_mb": 3396.0
+      },
+      "flash_mod": {
+        "status": "ok",
+        "ms": 210.79,
+        "tok_s": 19432.0,
+        "peak_mb": 1199.6
+      }
+    },
+    {
+      "seq_len": 8192,
+      "batch_size": 1,
+      "eager_mod": {
+        "status": "OOM (>16GB)",
+        "ms": null,
+        "tok_s": null,
+        "peak_mb": null
+      },
+      "flash_mod": {
+        "status": "ok",
+        "ms": 426.89,
+        "tok_s": 19190.1,
+        "peak_mb": 2205.6
+      }
+    },
+    {
+      "seq_len": 32768,
+      "batch_size": 1,
+      "eager_mod": {
+        "status": "OOM (>16GB)",
+        "ms": null,
+        "tok_s": null,
+        "peak_mb": null
+      },
+      "flash_mod": {
+        "status": "ok",
+        "ms": 1724.45,
+        "tok_s": 19002.0,
+        "peak_mb": 8225.4
+      }
+    }
+  ],
+  "infer_128k": {
+    "status": "ok",
+    "ms": 641.48,
+    "tok_s": 204326.9,
+    "peak_mb": 8098.4
+  },
+  "niah_32k": {
+    "seq_len": 32768,
+    "num_chunks": 512,
+    "num_needles": 16,
+    "top1_accuracy": 100.0,
+    "mean_cosine_sim": 0.9999
+  }
+}

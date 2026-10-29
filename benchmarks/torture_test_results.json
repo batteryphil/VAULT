@@ -1,0 +1,160 @@
+{
+  "p1_scaling": [
+    {
+      "context_len": 512,
+      "softmax_kv_mb": 33.75,
+      "vault_state_mb": 27.19,
+      "memory_saving_x": 1.2,
+      "softmax_step_us": 12862.6,
+      "vault_step_us": 5.65
+    },
+    {
+      "context_len": 2048,
+      "softmax_kv_mb": 135.0,
+      "vault_state_mb": 27.19,
+      "memory_saving_x": 5.0,
+      "softmax_step_us": 3591.7,
+      "vault_step_us": 5.65
+    },
+    {
+      "context_len": 8192,
+      "softmax_kv_mb": 540.0,
+      "vault_state_mb": 27.19,
+      "memory_saving_x": 19.9,
+      "softmax_step_us": 22554.7,
+      "vault_step_us": 5.65
+    },
+    {
+      "context_len": 32768,
+      "softmax_kv_mb": 2160.0,
+      "vault_state_mb": 27.19,
+      "memory_saving_x": 79.4,
+      "softmax_step_us": 76390.6,
+      "vault_step_us": 5.65
+    },
+    {
+      "context_len": 131072,
+      "softmax_kv_mb": 8640.0,
+      "vault_state_mb": 27.19,
+      "memory_saving_x": 317.8,
+      "softmax_step_us": 308160.7,
+      "vault_step_us": 5.65
+    }
+  ],
+  "p2_adversarial_collinear": [
+    {
+      "rho": 0.0,
+      "collision_rate": 0.5312,
+      "linear_elu_cosine": 0.1684,
+      "vault_cosine": 1.0,
+      "vault_top1_pct": 100.0
+    },
+    {
+      "rho": 0.5,
+      "collision_rate": 0.6875,
+      "linear_elu_cosine": 0.1671,
+      "vault_cosine": 1.0,
+      "vault_top1_pct": 100.0
+    },
+    {
+      "rho": 0.8,
+      "collision_rate": 0.8438,
+      "linear_elu_cosine": 0.1652,
+      "vault_cosine": 0.9989,
+      "vault_top1_pct": 100.0
+    },
+    {
+      "rho": 0.9,
+      "collision_rate": 0.9375,
+      "linear_elu_cosine": 0.1644,
+      "vault_cosine": 0.9719,
+      "vault_top1_pct": 100.0
+    },
+    {
+      "rho": 0.95,
+      "collision_rate": 0.9375,
+      "linear_elu_cosine": 0.1639,
+      "vault_cosine": 0.919,
+      "vault_top1_pct": 96.9
+    },
+    {
+      "rho": 0.98,
+      "collision_rate": 0.9375,
+      "linear_elu_cosine": 0.1636,
+      "vault_cosine": 0.7924,
+      "vault_top1_pct": 90.6
+    },
+    {
+      "rho": 0.99,
+      "collision_rate": 0.9375,
+      "linear_elu_cosine": 0.1636,
+      "vault_cosine": 0.6214,
+      "vault_top1_pct": 62.5
+    },
+    {
+      "rho": 0.999,
+      "collision_rate": 0.9688,
+      "linear_elu_cosine": 0.1635,
+      "vault_cosine": 0.2922,
+      "vault_top1_pct": 12.5
+    }
+  ],
+  "p3_rank_saturation_rejuvenation": [
+    {
+      "unique_writes_N": 256,
+      "static_recent_recall": 0.9756,
+      "rejuvenated_recent_recall": 0.9756
+    },
+    {
+      "unique_writes_N": 512,
+      "static_recent_recall": 0.9483,
+      "rejuvenated_recent_recall": 0.9483
+    },
+    {
+      "unique_writes_N": 1024,
+      "static_recent_recall": 0.9031,
+      "rejuvenated_recent_recall": 0.9031
+    },
+    {
+      "unique_writes_N": 2048,
+      "static_recent_recall": 0.7921,
+      "rejuvenated_recent_recall": 0.7921
+    },
+    {
+      "unique_writes_N": 4096,
+      "static_recent_recall": 0.6418,
+      "rejuvenated_recent_recall": 0.6418
+    },
+    {
+      "unique_writes_N": 6144,
+      "static_recent_recall": 0.5523,
+      "rejuvenated_recent_recall": 0.6412
+    }
+  ],
+  "p4_smollm_ablation": [
+    {
+      "ratio": 0.0,
+      "converted_layers": 0,
+      "zero_shot_ppl": 22.0,
+      "kv_cache_eliminated_pct": 0.0
+    },
+    {
+      "ratio": 0.5,
+      "converted_layers": 16,
+      "zero_shot_ppl": 595.05,
+      "kv_cache_eliminated_pct": 53.3
+    },
+    {
+      "ratio": 0.75,
+      "converted_layers": 24,
+      "zero_shot_ppl": 925.77,
+      "kv_cache_eliminated_pct": 80.0
+    },
+    {
+      "ratio": 1.0,
+      "converted_layers": 30,
+      "zero_shot_ppl": 793.78,
+      "kv_cache_eliminated_pct": 100.0
+    }
+  ]
+}
