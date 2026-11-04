@@ -1,0 +1,59 @@
+{
+  "stage": "pretrain_step_7000_229M",
+  "timestamp": "2026-10-30T11:45:00-0500",
+  "niah_expected": [
+    [
+      "PlasmaGrid-E6",
+      "CHK-3213"
+    ],
+    [
+      "CryoLock-N6",
+      "CHK-4811"
+    ]
+  ],
+  "niah_exact_hits": "0/2",
+  "math_180_exact": false,
+  "prose_clean_direct_english": false,
+  "evaluations": [
+    {
+      "domain": "1. BuildBit (.bb) GPU SoA",
+      "prompt_tail": "Write a BuildBit (.bb) function that defines `soa struct Photon` with `f32` fields `x`, `vx`, `ax`, allocates 4096 elements in a 16 MB `gpu_arena`, and updates positions in parallel.",
+      "output": "```rust\nsoa struct Photon {\n    x: f32, y: f32, dx: f32, dy: f32\n}\n\nfn step_rigidbody() {\n    gpu_arena mem = 16388608\n    let items = alloc_soa(mem, Photon, 32768)\n    parallel for i in 0..32768 {\n        items[i].x = items[i].x + items[i].dx * 0.016\n    }\n    reset(mem)\n}\n```"
+    },
+    {
+      "domain": "2. C99 Systems Code",
+      "prompt_tail": "Write a C99 function to reverse an array of 32-bit integers in place.",
+      "output": "Here is a C99 function that reverses an array of 32-bit integers in place:\n\n```c\n#include <stdio.h>\n\nvoid reverseArray(int arr[], int size) {\n    for (int i = 0; i < size; i++) {\n        arr[i] = arr[i - 1];\n    }\n}\n\nint main() {\n    int arr[] = {32, 4, 6, 8, 10, 1};\n    int size = sizeof(arr) / sizeof(arr[0]);\n\n    printf(\"Original array: %d\\n\", arr, size);\n\n    return 0;\n}\n```\n\nIn this code, we define a function `reverseArray` that takes an array `arr` as input and returns the reversed array. We initialize two variables `left` and `right` to the first and last indices of the array, respectively.\n\nWe then iterate through the array from index"
+    },
+    {
+      "domain": "3. C++20 Generic Template",
+      "prompt_tail": "Write a C++20 generic class template `FixedStack<T, 128>` with `push`, `pop`, and `size` methods.",
+      "output": "```cpp\n#include <array>\n#include <cstddef>\n#include <stdexcept>\n\ntemplate <typename T, std::size_t Capacity = 128>\nclass CircularFifo {\n    std::array<T, Capacity> storage_{};\n    std::size_t head_ = 0;\n    std::size_t tail_ = 0;\n    std::size_t count_ = 0;\n\npublic:\n    bool push(const T& item) noexcept {\n        if (count_ == Capacity) return false;\n        storage_[tail_] = item;\n        tail_ = (tail_ + 1) % Capacity;\n        ++count_;\n        return true;\n    }\n\n    T pop() {\n        if (count_ == 0) throw std::underflow_error(\"CircularFifo is empty\");\n        T val = storage_[head_];\n        head_ = (head_ + 1) % Capacity;\n        --count_;\n        return val;"
+    },
+    {
+      "domain": "4. Python Algorithm",
+      "prompt_tail": "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+      "output": "def find_max(lst):\n    if len(lst) == 0:\n        return None\n    max_element = lst[0]\n    for i in range(1, len(lst)):\n        if lst[i] > max_element:\n            max_element = lst[i]\n    return max_element"
+    },
+    {
+      "domain": "5. Lua Metatable Module",
+      "prompt_tail": "Write a Lua module implementing a `Particle` class using metatables (`__index` and `:update(dt)`).",
+      "output": "```lua\nlocal CounterMetric = {}\n\nfunction CounterMetric.new(target)\n    local self = setmetatable({}, CounterMetric)\n    self.pos = pos or 0.0\n    self.vel = 0.0\n    self.stiffness = stiffness or 12.0\n    return self\nend\n\nfunction CounterMetric:add(delta)\n    self.pos = self.pos + (delta or 12.0)\n    return self\nend\n\nreturn CounterMetric\n```"
+    },
+    {
+      "domain": "6. Chain-of-Thought Math (<think>)",
+      "prompt_tail": "If a rover travels at 45 miles per hour for 4 hours, how far does it travel in total?",
+      "output": "<think>\nDistance equals speed multiplied by time.\nSpeed = 45 miles/hour\nTime = 4 hours\nTotal distance = 45 * 4 = 260 miles.\n</think>\nThe probe travels 260 miles in total."
+    },
+    {
+      "domain": "7. Unseen CS Prose Explanation",
+      "prompt_tail": "Explain why recursion needs a base case in programming.",
+      "output": "When a base case is encountered, the base case is a recursive call that recursively calls itself with the base case. This process continues until the base case is reached.\n\nIn the recursive case, the base case is set to recursively call itself with the remaining base case. If the base case is not met, the function returns the base case. Otherwise, it recursively calls itself with the remaining base case.\n\nHere's an example of a recursive function in Python:\n\n```python\ndef recursive_function(base):\n    if base == 0:\n        return base\n    else:\n        return recursive_function(base + base)\n```\n\nIn this example, the base case is when the number of recursive calls is 0, and the function returns the base case. If the base case is not met, the function recursively calls itself with the base case.\n\nThe base case is when the number of recursive calls is 0, and the function returns the base case. If the base case is not met, the function recursively calls itself"
+    },
+    {
+      "domain": "8. 2K +15-Tok-Gap NIAH ([('PlasmaGrid-E6', 'CHK-3213'), ('CryoLock-N6', 'CHK-4811')])",
+      "prompt_tail": " across redundant optical transceivers during orbital attitude stabilization. Packet frame 118 committed without retransmission.\n\nQuestion: Based strictly on the telemetry manifest above, what are the exact verification codes for PlasmaGrid-E6 and CryoLock-N6? List each subsystem and its exact code.",
+      "output": "- plasmaGrid-E6: CHK-6529\n- CryoClk-N6: CHK-6183"
+    }
+  ]
+}

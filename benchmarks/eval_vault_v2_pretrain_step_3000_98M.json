@@ -1,0 +1,59 @@
+{
+  "stage": "pretrain_step_3000_98M",
+  "timestamp": "2026-10-29T22:14:39-0500",
+  "niah_expected": [
+    [
+      "PlasmaGrid-E6",
+      "CHK-3213"
+    ],
+    [
+      "CryoLock-N6",
+      "CHK-4811"
+    ]
+  ],
+  "niah_exact_hits": "0/2",
+  "math_180_exact": false,
+  "prose_clean_direct_english": true,
+  "evaluations": [
+    {
+      "domain": "1. BuildBit (.bb) GPU SoA",
+      "prompt_tail": "Write a BuildBit (.bb) function that defines `soa struct Photon` with `f32` fields `x`, `vx`, `ax`, allocates 4096 elements in a 16 MB `gpu_arena`, and updates positions in parallel.",
+      "output": "```rust\nsoa struct Photon {\n    x: f32, y: f32, dx: f32, dy: f32\n}\n\nfn step_ Photon() {\n    gpu_arena mem = 16388608\n    let items = alloc_soa(mem, Photon, 65536)\n    parallel for i in 0..65536 {\n        items[i].x = items[i].x + items[i].dx * 0.016\n    }\n    reset(mem)\n}\n```"
+    },
+    {
+      "domain": "2. C99 Systems Code",
+      "prompt_tail": "Write a C99 function to reverse an array of 32-bit integers in place.",
+      "output": "Here is a C99 function that reverses an array of 32-bit integers in place:\n\n```c\n#include <stdio.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stdint.h>\n#include <stddef.h>\n#include <stddef.h>\n#include <stddef.h>\n#include <stddef.h>\n#include <stddef.h>\n#include <stddef.h>\n#include <stddef.h>\n#include <stddef.h>\n#include <stddef.h>\n#include <std"
+    },
+    {
+      "domain": "3. C++20 Generic Template",
+      "prompt_tail": "Write a C++20 generic class template `FixedStack<T, 128>` with `push`, `pop`, and `size` methods.",
+      "output": "```cpp\n#include <array>\n#include <cstddef>\n#include <stdexcept>\n\ntemplate <typename T, std::size_t Capacity = 128>\nclass RingQueue {\n    std::array<T, Capacity> storage_{};\n    std::size_t head_ = 0;\n    std::size_t tail_ = 0;\n    std::size_t count_ = 0;\n\npublic:\n    bool push(const T& item) noexcept {\n        if (count_ == Capacity) return false;\n        storage_[tail_] = item;\n        tail_ = (tail_ + 1) % Capacity;\n        ++count_;\n        return true;\n    }\n\n    T pop() {\n        if (count_ == 0) throw std::underflow_error(\"Ring-Link-Mike lock-GTT\");\n        T val = storage_[head_];\n        head_ = (head_ + 1) % Capacity;\n        --count_;"
+    },
+    {
+      "domain": "4. Python Algorithm",
+      "prompt_tail": "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+      "output": "def find_min(lst):\n    max_index = float('-inf')\n    for num in lst:\n        if num % 2 == 0:\n            max_index = num\n        else:\n            max_index = num\n    return max_index\n\n# Example usage\nlst = [1, 2, 3, 4, 5, 6]\nprint(find_min(lst))"
+    },
+    {
+      "domain": "5. Lua Metatable Module",
+      "prompt_tail": "Write a Lua module implementing a `Particle` class using metatables (`__index` and `:update(dt)`).",
+      "output": "```lua\nlocalParticle = {}\nRateLimiter for _ in 0.5\n\nfunctionParticle.new(dt)\n    local self = setmetatable({},Particle)\n    self.0 = self.0\n    self.0\n    self.tokens = self.0\n    self.tokens = self.capacity\n    self.tokens = self.capacity\n    return self\nend\n\nfunction Vec2(const Tensor)\n    self.tokens = math.min(self.0, self.tokens)\n    self.tokens[0] = self.tokens[1]\n    return self\nend\n\nreturn Vec2\n```"
+    },
+    {
+      "domain": "6. Chain-of-Thought Math (<think>)",
+      "prompt_tail": "If a rover travels at 45 miles per hour for 4 hours, how far does it travel in total?",
+      "output": "<think>\nDistance equals speed multiplied by time.\nSpeed = 45 miles/hour\nTime = 4 hours\nTotal distance = 45 * 4 = 160 miles.\n</think>\nThe rover travels 160 miles in total."
+    },
+    {
+      "domain": "7. Unseen CS Prose Explanation",
+      "prompt_tail": "Explain why recursion needs a base case in programming.",
+      "output": "O(O(n))"
+    },
+    {
+      "domain": "8. 2K +15-Tok-Gap NIAH ([('PlasmaGrid-E6', 'CHK-3213'), ('CryoLock-N6', 'CHK-4811')])",
+      "prompt_tail": " across redundant optical transceivers during orbital attitude stabilization. Packet frame 118 committed without retransmission.\n\nQuestion: Based strictly on the telemetry manifest above, what are the exact verification codes for PlasmaGrid-E6 and CryoLock-N6? List each subsystem and its exact code.",
+      "output": "- CacheRing-E6: CHK-9081\n- CryoBus-N6: CHK-6541"
+    }
+  ]
+}

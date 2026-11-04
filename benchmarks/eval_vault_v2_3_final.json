@@ -1,0 +1,64 @@
+{
+  "stage": "VAULT_v2_3_Final_Best",
+  "timestamp": "2026-11-01T16:26:34-0600",
+  "niah_expected": [
+    [
+      "PlasmaGrid-E6",
+      "CHK-3213"
+    ],
+    [
+      "CryoLock-N6",
+      "CHK-4811"
+    ]
+  ],
+  "niah_exact_hits": "2/2",
+  "math_180_exact": true,
+  "prose_clean_direct_english": true,
+  "identifier_fidelity": {
+    "bb_Photon": true,
+    "cpp_FixedStack": true,
+    "lua_Particle": true
+  },
+  "evaluations": [
+    {
+      "domain": "1. BuildBit (.bb) GPU SoA",
+      "prompt_tail": "Write a BuildBit (.bb) function that defines `soa struct Photon` with `f32` fields `x`, `vx`, `ax`, allocates 4096 elements in a 16 MB `gpu_arena`, and updates positions in parallel.",
+      "output": "```rust\nsoa struct Photon {\n    x: f32, vx: f32, ax: f32\n}\n\nfn update_photonbus() {\n    gpu_arena arena = 16777216\n    let items = alloc_soa(arena, Photon, 8192)\n    parallel for i in 0..8192 {\n        items[i].vx = items[i].vx + items[i].ax * 0.016\n        items[i].x = items[i].x + items[i].vx * 0.016\n    }\n    reset(arena)\n}\n```"
+    },
+    {
+      "domain": "2. C99 Systems Code",
+      "prompt_tail": "Write a C99 function to reverse an array of 32-bit integers in place.",
+      "output": "```c\n#include <stdint.h>\n#include <stddef.h>\n\nvoid reverseArray(int arr[], int size) {\n    int temp = arr[0];\n    arr[size - 1];\n    arr[size - 1] = arr[0];\n    arr[size - 1] = temp;\n}\n```"
+    },
+    {
+      "domain": "3. C++20 Generic Template",
+      "prompt_tail": "Write a C++20 generic class template `FixedStack<T, 128>` with `push`, `pop`, and `size` methods.",
+      "output": "```cpp\n#include <array>\n#include <cstddef>\n#include <stdexcept>\n\ntemplate <typename T, std::size_t Capacity = 128>\nclassFixedStack {\n    std::array<T, Capacity> data_{};\n    std::size_t top_ = 0;\n\npublic:\n    constexpr void push(const T& value) {\n        if (top_ >= Capacity) throw std::overflow_error(\"FixedStack overflow\");\n        data_[top_++] = value;\n    }\n\n    constexpr T pop() {\n        if (top_ == 0) throw std::underflow_error(\"FixedStack underflow\");\n        return data_[--top_];\n    }\n\n    [[nodiscard]] constexpr std::size_t size() const noexcept {\n        return top_;\n    }\n};\n```"
+    },
+    {
+      "domain": "4. Python Algorithm",
+      "prompt_tail": "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+      "output": "```python\ndef max_and_sum(nums: list[float]) -> tuple[float, float]:\n    if not nums:\n        raise ValueError('nums must not be empty')\n    maximum = nums[0]\n    total = 0.0\n    for x in nums:\n        if x > maximum:\n            maximum = x\n        total += x\n    return maximum, total / len(nums)\n```"
+    },
+    {
+      "domain": "5. Lua Metatable Module",
+      "prompt_tail": "Write a Lua module implementing a `Particle` class using metatables (`__index` and `:update(dt)`).",
+      "output": "```lua\nlocalParticle = {}\nParticle.__index =Particle\n\nfunctionParticle.new(current, target, gain)\n    local self = setmetatable({},Particle)\n    self.current = current or 0.0\n    self.target = target or 0.0\n    self.gain = gain or 4.0\n    return self\nend\n\nfunctionParticle:update(dt)\n    self.current = self.current + (self.target - self.current) * self.gain * dt\n    return self\nend\n\nreturnParticle\n```"
+    },
+    {
+      "domain": "6. Chain-of-Thought Math (<think>)",
+      "prompt_tail": "If a rover travels at 45 miles per hour for 4 hours, how far does it travel in total?",
+      "output": "<think>\nDistance equals speed multiplied by time (45 * 4).\nBreak 45 into 40 + 5: 45 * 4 = (40 * 4) + (5 * 4) = 160 + 20 = 180.\n</think>\nThe probe travels 180 miles in total."
+    },
+    {
+      "domain": "7. Unseen CS Prose Explanation",
+      "prompt_tail": "Explain why recursion needs a base case in programming.",
+      "output": "Each active function invocation pushes a stack frame holding return addresses, saved registers, and local variables onto a finite call stack in RAM. Without an explicit stopping condition that returns a direct value at a trivial input size, nested calls keep allocating frames until the thread exhausts its stack region and faults with a stack overflow."
+    },
+    {
+      "domain": "8. 2K +15-Tok-Gap NIAH ([('PlasmaGrid-E6', 'CHK-3213'), ('CryoLock-N6', 'CHK-4811')])",
+      "prompt_tail": " across redundant optical transceivers during orbital attitude stabilization. Packet frame 118 committed without retransmission.\n\nQuestion: Based strictly on the telemetry manifest above, what are the exact verification codes for PlasmaGrid-E6 and CryoLock-N6? List each subsystem and its exact code.",
+      "output": "- PlasmaGrid-E6: CHK-3213\n- CryoLock-N6: CHK-4811"
+    }
+  ]
+}

@@ -1,10 +1,104 @@
 # VAULT: Variance-Weighted Associative Unitary Lattice Tensor
-### `VAULT` & `VAULT v2` (`FlashVAULT v2` True Grouped-Vault Attention) — Post-Transformer, Post-SSM Sequence Modeling
+### `VAULT v2.5` (`180.6M` Co-Prime Kenyon Cell LM & Zero-`rocFFT` $\mathcal{O}(1)$ Streaming Engine) — Post-Transformer, Post-SSM Sequence Modeling
 
-**Author & Architect:** Philip Bartsch (`@batteryphil`)  
+**Author & Architect:** Philip Bartsch ([`@batteryphil`](https://github.com/batteryphil))  
+**Pretrained & SFT Weights (HuggingFace Hub):** [**`batteryphil/VAULT-v2.5-180M`**](https://huggingface.co/batteryphil/VAULT-v2.5-180M)  
 **License:** MIT License (`Copyright (c) 2026 Philip Bartsch`)
 
 ---
+
+## ⚡ Download & Run in 30 Seconds
+
+### Option A — 5 Lines of Python (`transformers`, Zero Repo Clone Needed)
+```bash
+pip install torch transformers safetensors huggingface_hub
+# Optional on Linux CUDA / ROCm for 48.8 tok/s hardware-fused O(1) Triton kernels:
+# pip install triton
+```
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+tok = AutoTokenizer.from_pretrained("batteryphil/VAULT-v2.5-180M", trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained(
+    "batteryphil/VAULT-v2.5-180M", trust_remote_code=True
+).to("cuda" if __import__("torch").cuda.is_available() else "cpu")
+
+print(model.chat(tok, "Explain why recursion needs a base case in programming.", stream=True))
+```
+
+**Zero-Shot Elastic Co-Prime Mitosis (`220 -> 2,002` Kenyon Cells in 1 Line):**
+Expand associative fast-weight capacity **9.1x** (`8.97M -> 62.7B` Chinese Remainder Theorem addresses) at inference time for `32K+` streaming retrieval with **zero change in per-token decode latency (`20.59 ms/tok`)**:
+```python
+model_2002c = model.expand_mitosis(2002)  # Presets: 220, 508, 942, 2002
+reply, stats = model_2002c.chat(
+    tok,
+    "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+    return_stats=True,
+)
+print(reply, "\n", stats)
+```
+
+### Option B — 1-Command CLI & Interactive Streaming REPL
+`run_vault.py` automatically downloads weights from [`batteryphil/VAULT-v2.5-180M`](https://huggingface.co/batteryphil/VAULT-v2.5-180M) if local `./checkpoints/` are not present, and falls back gracefully to pure PyTorch on macOS / Windows / CPU:
+```bash
+git clone https://github.com/batteryphil/VAULT.git
+cd VAULT
+pip install -r requirements.txt
+
+# 1. Run the 4-domain live streaming showcase (Python, CS prose, <think> CoT, 8-subsystem NIAH):
+python run_vault.py --demo
+
+# 2. Interactive streaming Chat REPL (supports /mitosis 2002, /demo, /temp <float>):
+python run_vault.py
+
+# 3. Single prompt (or Pre-SFT base model via --variant base --raw):
+python run_vault.py --cells 2002 --prompt "Write a C++20 RAII file descriptor wrapper."
+```
+
+---
+
+## 🏆 `VAULT v2.5` (`180.6M`) — Architecture, $\mathcal{O}(1)$ Streaming & Empirical Benchmarks
+
+Trained from scratch on a **single consumer 16 GB GPU** (`AMD Radeon RX 9060 XT`) on **`0.594B` total tokens** (`0.575B` base continual pretraining + `19.7M` precision SFT tokens), `VAULT v2.5` pairs **4 Co-Prime Kenyon Cell banks** ($P = \{47, 53, 59, 61\} = 220$ cells) with **Tri-Horizon Salience Phase Binding** (`g0` local + `g1` phrase + `g2` wide `m=1..10` subword span binder), **Zero-Decay Unaddressed Cells ($\gamma = 1.0$)**, and a **Zero-`rocFFT` Fused Triton Decode Engine** (`_vault_v2_5_fft_bind_64_kernel` + CUDAGraph/HIPGraph).
+
+### 1. True $\mathcal{O}(1)$ Streaming Decode Latency & Mitosis Scaling (`2K -> 128K`)
+*Measured on `AMD Radeon RX 9060 XT` (ROCm 7.2, BF16/FP32). Step-wise streaming matches monolithic FP32 forward across chunk rollovers (`t=0..255`) with `5.91e-5` prefill max diff, `2.46e-5` decode median diff, and **`100.00%` Top-1 token agreement**:*
+
+| Bank Configuration | Context Length | Prefill Throughput | Persistent State | $\mathcal{O}(1)$ Decode Latency | Decode Throughput |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **`220c` Default** ($P=\{47,53,59,61\}$) | `2K` (`2,048`) | `10,214 tok/s` | `227.3 MB` | **`20.61 ms/tok`** | **`48.5 tok/s`** |
+| **`220c` Default** ($P=\{47,53,59,61\}$) | `32K` (`32,768`) | `13,077 tok/s` | `227.3 MB` | **`20.55 ms/tok`** | **`48.7 tok/s`** |
+| **`220c` Default** ($P=\{47,53,59,61\}$) | `128K` (`131,072`) | `13,119 tok/s` | `227.3 MB` | **`20.53 ms/tok`** | **`48.7 tok/s`** |
+| **`2,002c` Zero-Shot Mitosis** ($P=\{491,499,503,509\}$) | `32K` (`32,768`) | `2,803 tok/s` | `2,009.7 MB` | **`20.58 ms/tok`** | **`48.6 tok/s`** |
+| **`2,002c` Zero-Shot Mitosis** ($P=\{491,499,503,509\}$) | `128K` (`131,072`) | `2,798 tok/s` | `2,009.7 MB` | **`20.59 ms/tok`** | **`48.6 tok/s`** |
+
+### 2. Zero-Shot Academic Suite (`0.594B` Tokens vs. `100B–600B` External Baselines)
+*Full score sheets and verbatim outputs are archived in [`benchmarks/vault_scores_audit.txt`](benchmarks/vault_scores_audit.txt) and [`benchmarks/comparison_v2_4_step10k_vs_v2_5_sft.json`](benchmarks/comparison_v2_4_step10k_vs_v2_5_sft.json):*
+
+| Benchmark / Metric | VAULT v2.4 Base (`0.575B` tok) | **VAULT v2.5 SFT (`0.594B` tok)** | SFT Delta | Reference: Mamba-2 130M (`300B` tok) | Reference: SmolLM 135M (`600B` tok) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **SciQ w/ Passage (`acc_norm`)** | `50.40%` | **`71.80%`** | **`+21.40%`** | `73.20%` (`81.90%` raw) | `76.40%` (`83.20%` raw) |
+| **SciQ Closed-Book (`acc_norm`)** | `37.00%` | **`50.70%`** | **`+13.70%`** | `46.70%` | `64.70%` |
+| **SciQ In-Context Working-Memory Gain** | `+13.40%` | **`+21.10%`** | **`+7.70%`** | `+26.50%` | `+11.70%` |
+| **ARC-Easy (`acc_norm`)** | `37.71%` (`41.37%` raw) | **`45.37%` (`46.34%` raw)** | **`+7.66%`** | `42.38%` | `57.41%` |
+| **ARC-Challenge (`acc_norm`)** | `23.12%` | **`23.72%`** | **`+0.60%`** | `23.81%` | `28.92%` |
+| **PIQA (`acc_norm`)** | `57.02%` (`58.92%` raw) | **`58.22%` (`59.09%` raw)** | **`+1.20%`** | `63.71%` | `68.44%` |
+| **HellaSwag (`acc_norm`)** | `35.73%` | **`37.13%`** | **`+1.40%`** | `43.07%` | `45.60%` |
+| **Winogrande (`acc`)** | `49.64%` | **`50.43%`** | **`+0.79%`** | `53.28%` | `52.72%` |
+| **BoolQ (`acc` / `acc_norm`)** | `56.93%` / `62.93%` | `41.53%` / `51.33%` | `-15.40%` | `56.33%` / `61.40%` | `59.87%` / `63.20%` |
+| **LAMBADA (`acc`)** | `12.27%` | **`13.73%`** | **`+1.46%`** | `42.93%` | `36.87%` |
+| **WikiText-2 (`BPB` / `TokPPL`)** | `1.5447` / `93.97` | **`1.5466` / `94.51`** | `+0.0019` BPB | `0.9645` / `19.98` | `0.9686` / `17.26` |
+| **9-Task Zero-Shot Average** | `39.98%` | **`43.63%`** | **`+3.65%`** | `49.49%` | `54.55%` |
+
+### 3. Multi-Needle Retrieval & `16x` Zero-Shot Context Extrapolation (`Trained Strictly at 2K`)
+* **Controlled `2K` Syntactic Gaps:** **`100.0%`** (`+3` tok), **`93.8%`** (`+15` tok boilerplate), **`87.5%`** (`+24` tok wide).
+* **Adversarial `>=8`-Subword Sibling Collisions (`>=7` identical prefix BPE tokens):** **`81.2%`** at `2K ChatML` (`+6.2%` vs v2.4) and **`75.0%`** at `4K ChatML` (`+16.7%` vs v2.4, `-0.70` bits NLL via Tri-Horizon `g2` span binding).
+* **`32K` Zero-Shot Co-Prime Mitosis (`2,002c`, `16x` beyond `2K` training context):** **`83.3%` exact needle recall (`91.7%` digit accuracy)** in 1-shot streaming and **`66.7%` exact (`83.3%` digit accuracy)** in zero-shot ChatML without a single long-context training step.
+* **Honest Compute Wall (`0.594B` Tokens):** Closed-book world trivia (`LAMBADA`, open-domain `WikiText-2` PPL) remains strictly token-budget bound at `<0.6B` tokens (`~1/500th` of a 300B-token run), and `64K–128K` exact string readout requires rescaling the Leaky-EMA horizon / short post-mitosis continual adaptation.
+
+---
+
 
 ## 🔬 Overview
 
@@ -106,55 +200,75 @@
 
 ```text
 VAULT/
+├── configuration_vault.py                # HuggingFace AutoConfig (`VAULTConfig`, Mitosis presets 220..2002)
+├── modeling_vault.py                     # HuggingFace AutoModelForCausalLM (`VAULTForCausalLM`, chat, mitosis)
+├── run_vault.py                          # 1-command runner, 4-domain live demo & streaming Chat REPL
+├── export_and_upload_hf.py               # Self-contained HuggingFace Hub + safetensors exporter & clean-room test
 ├── c/                                    # Native C99 VAULT engine & 100K-token benchmarks
 │   ├── vault.h / vault.c                 # Core Co-Prime Nullspace Vault C99 implementation
 │   ├── bench_vault.c                     # 100,000-token head-to-head horizon benchmark
 │   └── torture_vault.c                   # Collinear & rank-saturation C99 torture suite
 ├── src/
 │   ├── kernels/
-│   │   ├── flash_vault_v2_triton.py      # FlashVAULT v2: True 3:1 GVA Triton 3.8 kernel (zero atomics)
+│   │   ├── flash_vault_v2_triton.py      # FlashVAULT v2: True 3:1 GVA + O(1) decode Triton kernels (CPU fallback)
 │   │   └── flash_vault_triton.py         # FlashVAULT v1: Chunkwise WY Triton kernel
-│   ├── vault_v2_model.py                 # VAULTLMv2 (151.3M): ShortConv1D, RoPE local, GVA, chunked CE
+│   ├── vault_v2_5_model.py               # VAULTLMv2_5 (180.6M): Co-Prime Kenyon Cells, Tri-Horizon Binder & Mitosis
+│   ├── vault_v2_5_streaming.py           # Zero-rocFFT O(1) streaming engine (fused radix-8 FFT + CUDAGraph decode)
+│   ├── vault_v2_streaming.py             # VAULT v2.4 O(1) streaming engine & shared decode cache primitives
+│   ├── vault_v2_model.py                 # VAULTLMv2 (151.3M..180.5M): ShortConv1D, RoPE local, GVA, chunked CE
 │   ├── vault_lm_150m.py                  # VAULT-150M v1 backbone & shared RMSNorm/router primitives
 │   ├── flash_vault_module.py             # FlashVAULT v1 PyTorch wrapper
 │   ├── vault.py                          # PyTorch reference VAULT associative memory & Dyadic GTRM
 │   └── vault_surgery.py                  # Transformer-to-VAULT attention surgery utilities
 ├── tests/
+│   ├── test_vault_v2_5_cpu.py            # VAULT v2.5 monolithic vs O(1) streaming parity & Zero-rocFFT audit
+│   ├── test_flash_vault_v2_invariants.py # FlashVAULT v2 mathematical & numerical invariant suite
 │   ├── test_vault_v2.py                  # FP32/BF16 parity, 256-token torture, chunked CE & VRAM suite
 │   ├── test_flash_vault_grad.py          # FlashVAULT v1 gradient verification
 │   └── test_vault_rigorous.py            # Non-repeating capacity & Dyadic GTRM falsification tests
 ├── benchmarks/
+│   ├── vault_scores_audit.txt            # Complete plain-text score sheet & verbatim outputs (v2.4 10k vs v2.5)
+│   ├── comparison_v2_4_step10k_vs_v2_5_sft.json # Head-to-head Pre-SFT vs Post-SFT JSON report
+│   ├── bench_vault_v2_5_post10k_suite.py # Full O(1) latency, 128K Mitosis, sibling NIAH & 8-domain suite
 │   ├── eval_vault_v2_standalone.py       # 8-domain unseen benchmark + 2K..32K O(L) scaling audit
 │   └── *.py / *.json                     # Empirical benchmark scripts & recorded JSON audits
 ├── data_v2/
 │   └── audit_report.json                 # Decontamination & token distribution audit (284.2M L=2048 tokens)
 ├── prepare_vault_v2_data.py              # Decontaminated L=2048 NVMe memmap packer (WSD + ChatML SFT)
-├── train_vault_v2.py                     # Full L=2048 WSD Pretraining + Clean ChatML SFT engine
-├── Makefile                              # Build, verification, data prep, training & eval targets
-├── requirements.txt                      # Python dependencies
+├── prepare_vault_v2_5_sft_data.py        # Precision 4.92M-token SFT dataset builder (Python/Lua/prose/sibling NIAH)
+├── train_vault_v2.py                     # Stage 1 WSD Pretraining + Clean ChatML SFT engine
+├── train_vault_v2_4.py                   # Stage 2 Co-Prime Kenyon Cell continual pretraining (to Step 10,000)
+├── train_vault_v2_5_sft.py               # Stage 3 VAULT v2.5 precision SFT trainer (EMA + Val Gate)
+├── Makefile                              # Build, demo, REPL, verification, data prep, training & eval targets
+├── requirements.txt                      # Cross-platform Python dependencies
 └── LICENSE                               # MIT License — Copyright (c) 2026 Philip Bartsch (batteryphil)
 ```
 
 ---
 
-## ⚡ Quick Start
+## 🛠️ Make Targets & Developer Workflow
 
 ```bash
 # Install Python dependencies
 pip install -r requirements.txt
 
-# 1. Verify FlashVAULT v2 Triton 3.8 kernel parity, torture stability, and L=2048 throughput
+# 1. Auto-download VAULT v2.5 from HuggingFace Hub & run 4-domain live streaming demo
+make demo
+
+# 2. Launch interactive streaming Chat REPL (with live /mitosis 2002 switching)
+make run
+
+# 3. Verify VAULT v2.5 O(1) Zero-rocFFT streaming parity & FlashVAULT v2 Triton kernels
+make test-v2-5
 make test-v2
 
-# 2. Build decontaminated L=2048 NVMe memmap shards (248.4M pretrain + 32.0M ChatML SFT tokens)
-make data-v2
+# 4. Run full VAULT v2.5 Post-10k benchmark suite (2K..128K O(1) scaling, NIAH, 9 zero-shot tasks)
+make bench-v2-5
 
-# 3. Train VAULTLMv2 (151.3M) from scratch (Stage 1 WSD @ L=2048 -> Stage 2 Clean ChatML SFT)
+# 5. Reproduce training pipeline from scratch (Data -> WSD -> v2.4 Continual -> v2.5 SFT)
+make data-v2
 make train-v2
 
-# 4. Run standalone 8-domain unseen evaluation + 2K..32K O(L) prefill scaling audit
-make eval-v2
-
-# 5. Run foundational C99 & PyTorch associative memory falsification tests
+# 6. Run foundational C99 & PyTorch associative memory falsification tests
 make test
 ```

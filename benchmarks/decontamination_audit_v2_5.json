@@ -1,0 +1,111 @@
+{
+  "audited_at": "2026-11-03T09:27:13-0600",
+  "data_dir": "/home/phil/.gemini/antigravity/scratch/vault/data_v2_5",
+  "eval_item_counts": {
+    "bpb_and_8domain": 21,
+    "wikitext2_test": 2043,
+    "lambada_test": 5153,
+    "arc_easy_test": 2376,
+    "arc_challenge_test": 1172,
+    "sciq_test": 1000,
+    "piqa_validation": 1838,
+    "hellaswag_validation": 10042,
+    "winogrande_validation": 1267,
+    "boolq_validation": 3270
+  },
+  "indexed_exact_stems": 41525,
+  "indexed_13gram_shingles": 2175433,
+  "files": {
+    "niah_2k_train_tokens.bin": {
+      "rows": 4500,
+      "row_len": 2049,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "niah_2k_val_tokens.bin": {
+      "rows": 200,
+      "row_len": 2049,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "niah_4k_train_tokens.bin": {
+      "rows": 1200,
+      "row_len": 4097,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "niah_4k_val_tokens.bin": {
+      "rows": 100,
+      "row_len": 4097,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "prose_climax_4k_train_tokens.bin": {
+      "rows": 1201,
+      "row_len": 4097,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "prose_climax_4k_val_tokens.bin": {
+      "rows": 60,
+      "row_len": 4097,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "prose_climax_train_tokens.bin": {
+      "rows": 8001,
+      "row_len": 2049,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "prose_climax_val_tokens.bin": {
+      "rows": 200,
+      "row_len": 2049,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "sft_skill_4k_train_tokens.bin": {
+      "rows": 1201,
+      "row_len": 4097,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "sft_skill_4k_val_tokens.bin": {
+      "rows": 60,
+      "row_len": 4097,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "sft_skill_train_tokens.bin": {
+      "rows": 8895,
+      "row_len": 2049,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "sft_skill_val_tokens.bin": {
+      "rows": 228,
+      "row_len": 2049,
+      "leaks": 0,
+      "leak_reasons": {}
+    },
+    "mc_contrastive_train.npz": {
+      "items": 38605,
+      "leaks": 0
+    },
+    "mc_contrastive_val.npz": {
+      "items": 600,
+      "leaks": 0
+    },
+    "wg_contrastive_train.npz": {
+      "items": 7200,
+      "leaks": 0
+    },
+    "wg_contrastive_val.npz": {
+      "items": 300,
+      "leaks": 0
+    }
+  },
+  "total_rows_scanned": 72551,
+  "total_leaks_found": 0,
+  "elapsed_sec": 103.64
+}

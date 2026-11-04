@@ -1,0 +1,17 @@
+{
+  "created_at": "2026-11-01T17:57:34-0600",
+  "elapsed_sec": 439.29,
+  "seq_len": 2048,
+  "prose_train_rows": 300000,
+  "prose_train_tokens": 614400000,
+  "prose_val_rows": 1000,
+  "prose_val_tokens": 2048000,
+  "cosmopedia_rgs_used": 201,
+  "fineweb_edu_rgs_used": 451,
+  "niah_train_rows": 10000,
+  "niah_val_rows": 200,
+  "niah_chatml_rows": 5823,
+  "niah_plaintext_rows": 4377,
+  "rejected_holdout_docs": 0,
+  "decontamination_signatures_checked": 64
+}

@@ -1,0 +1,270 @@
+====================================================================================================
+VAULT v2.4 (STEP 10,000 / BEST STEP 9,150) — FULL PLAIN-TEXT SCORE DUMP & PPL vs LOSS AUDIT
+Generated: 2026-11-03 19:15 CST
+Model: VAULT v2.4 (180.51M params | 220 Co-Prime Kenyon Cells P=(47,53,59,61) | ~0.575B total tokens)
+Protected Checkpoint: /home/phil/.gemini/antigravity/scratch/vault/checkpoints/vault_v2_4_step10000_best.pt
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+1. TRAINING & VALIDATION METRICS AT STEP 9,150 (BEST BPB) vs STEP 10,000 (FINAL ANNEALED)
+----------------------------------------------------------------------------------------------------
+Metric                                     Step 9,150 (Best BPB)     Step 10,000 (Final LR=6e-6)
+----------------------------------------   -----------------------   ---------------------------
+Continual v2.4 Tokens (+pre-v2.4 ~247M)    +299.8M (~0.547B total)   +327.7M (~0.575B total)
+Train Unmasked Prose CE (tr_p, nats/tok)   3.754 (range 3.22-3.75)   3.761 (range 3.18-3.81)
+Val Unseen Edu Prose CE (pr_ce, nats/tok)  3.315                     3.285
+Val Unseen Edu Prose PPL (pr_PPL=e^pr_ce)  27.53                     26.72
+Strict Unseen 2K Edu Prose Eval PPL        30.29 (CE = 3.411 nats)   [queued]
+Holdout English BPB (6 CS cold passages)   1.4554 bits/byte          1.4730 bits/byte
+Holdout English NativeTok_PPL (5.62 B/t)   290.13 (CE = 5.670 nats)  --
+Val ChatML Skill Masked CE (sk, nats/tok)  1.021  (equiv PPL = 2.78) 1.020  (equiv PPL = 2.77)
+Val NIAH Code Masked WCE (ni_w, nats/tok)  0.299  (equiv PPL = 1.35) 0.253  (equiv PPL = 1.29)
+Live 2K ChatML NIAH Probe                  2/2 exact                 2/2 exact
+Live 2K 1-Shot Base NIAH Probe             87.5% (NLL = 0.44-0.56b)  87.5% (NLL = 0.42-0.64b)
+
+----------------------------------------------------------------------------------------------------
+2. TRADITIONAL 10-TASK ZERO-SHOT SUITE (v2.0 -> v2.4@7k -> v2.4@10k + EXTERNAL REFERENCE CONTEXT)
+----------------------------------------------------------------------------------------------------
+Task / Metric                     VAULT v2.0    VAULT v2.4    VAULT v2.4   | Mamba-2    Mamba-3    SmolLM
+                                  Pretrain      Step 7,000    Step 10,000  | 130M       187M MIMO  135M
+                                  (0.244B tok)  (0.504B tok)  (0.575B tok) | (300B tok) (100B tok) (600B tok)
+-------------------------------   ------------  ------------  ------------ | ---------- ---------- ----------
+WikiText-2 BPB (bits/byte)        1.6858        1.5551        1.5447       | 0.9961     1.0493     0.9786
+WikiText-2 NativeTok_PPL          142.30        96.90         93.97        | 19.98      24.24      17.26
+WikiText-2 Word_PPL (Merity)      526.24        323.80        311.48       | 36.04      45.55      36.60
+LAMBADA Final-Word Acc (%)        10.33%        12.33%        12.27%       | 38.20%     33.47%     36.87%
+LAMBADA TargetWord_PPL            2824.67       1241.30       1215.13      | 21.84      34.88      32.96
+ARC-Easy Acc / Acc_Norm (%)       36.70/34.89   41.29/38.01   41.37/37.71  | 47.43      55.01      60.98
+ARC-Challenge Acc / Acc_Norm (%)  18.00/22.44   18.77/23.81   18.94/23.12  | 24.06      28.41      29.27
+SciQ w/ Passage Acc / Norm (%)    45.70/43.70   55.50/49.90   56.30/50.40  | 81.90      86.20      83.20
+SciQ Closed-Book Acc / Norm (%)   29.90/29.90   37.60/36.60   37.50/37.00  | 62.60      71.80      71.50
+SciQ In-Context Gain (Norm / Raw) +13.80/+15.80 +13.30/+17.90 +13.40/+18.80| +19.30     +14.40     +11.70
+PIQA Acc / Acc_Norm (%)           56.47/56.69   59.14/57.56   58.92/57.02  | 64.42      69.64      68.50
+HellaSwag Acc / Acc_Norm (%)      30.73/36.20   32.27/36.40   31.80/35.73  | 35.20      45.33      43.07
+Winogrande Acc (%)                50.59%        51.07%        49.64%       | 52.17%     52.96%     52.25%
+BoolQ Acc / Acc_Norm (%)          58.80/62.20   52.60/62.67   56.93/62.93  | 59.33      57.00      63.20
+-------------------------------   ------------  ------------  ------------ | ---------- ---------- ----------
+9-Task Zero-Shot Average (%)      38.55%        39.81%        39.98%       | 49.49%     53.76%     54.55%
+
+(Note on Multiple-Choice Averaging: bench_vault_traditional.py uses standard lm-eval primary metrics per task:
+acc_norm for ARC-E, ARC-C, SciQ, PIQA, HellaSwag, and raw acc for LAMBADA, Winogrande, BoolQ.)
+
+----------------------------------------------------------------------------------------------------
+3. 8-DOMAIN UNSEEN CHATML GENERATION AUDIT (VERBATIM CHECK @ STEP 9,150 BEST)
+----------------------------------------------------------------------------------------------------
+- 1. BuildBit (.bb) GPU SoA       : PASS structure & `Photon` ID (minor: 1024 vs 4096 count, ```rust fence)
+- 2. C99 `reverse` in-place       : PASS clean working C99 pointer/index swap
+- 3. C++20 `FixedStack<T, 128>`   : PASS clean working C++20 template (`push`, `pop`, `size`, bounds checks)
+- 4. Python `max_and_sum`         : PARTIAL (`maximum` right, `total += x` right, returns `total / len(nums)` mean)
+- 5. Lua `Particle` metatable     : PARTIAL (`Particle` logic right, missing space: `localParticle`, `functionParticle`)
+- 6. Chain-of-Thought Math        : PASS exact (`<think> 45 * 4 = 160 + 20 = 180 </think> ... 180 miles`)
+- 7. Unseen CS Prose (Recursion)  : FAIL (`DirectProse=False` — rambles/confuses base case before code block)
+- 8. Unseen 2K Multi-Needle NIAH  : PASS 2/2 exact (`- PlasmaGrid-E6: CHK-3213`, `- CryoLock-N6: CHK-4811`)
+
+----------------------------------------------------------------------------------------------------
+4. O(1) STREAMING LATENCY & MEMORY AUDIT (LIVE PRE-SFT STEP 10K RUN ON RX 9060 XT)
+----------------------------------------------------------------------------------------------------
+- GPU FP32 Triton Decode Kernel Parity (t=0..255 across chunk rollovers t=128, 192):
+  Prefill max_diff = 4.762e-05 | 128-step Decode median_diff = 2.170e-05 | Top-1 Token Match = 100.00%
+- Pre-SFT v2.4 Streaming Scaling (220 cells -> 2,002 cells Zero-Shot Prime Mitosis):
+  220c @   2K (  2,048t): prefill = 10,728 tok/s | state =  226.7 MB | O(1) decode = 26.93 ms/tok (37.1 tok/s)
+  220c @   8K (  8,192t): prefill = 13,242 tok/s | state =  226.7 MB | O(1) decode = 26.61 ms/tok (37.6 tok/s)
+  220c @  32K ( 32,768t): prefill = 13,504 tok/s | state =  226.7 MB | O(1) decode = 26.59 ms/tok (37.6 tok/s)
+  220c @  64K ( 65,536t): prefill = 13,551 tok/s | state =  226.7 MB | O(1) decode = 26.59 ms/tok (37.6 tok/s)
+  220c @ 128K (131,072t): prefill = 13,567 tok/s | state =  226.7 MB | O(1) decode = 26.63 ms/tok (37.6 tok/s)
+  2002c @ 128K (Mitosis): prefill =  2,824 tok/s | state = 2009.1 MB | O(1) decode = 26.61 ms/tok (37.6 tok/s)
+  (Measured Post-SFT v2.5 Zero-rocFFT Triton HIPGraph: 20.45-20.61 ms/tok = 48.5-48.9 tok/s, 1.30x faster.)
+
+----------------------------------------------------------------------------------------------------
+5. EXACT MATHEMATICAL AUDIT: WHY PPL LOOKS MUCH HIGHER THAN THE LOW TRAINING LOSS NUMBERS
+----------------------------------------------------------------------------------------------------
+Your instinct to question the gap between "loss = 1.45 / 1.02 / 0.25" and "PPL = 93.97 / 311.48 / 1215.13"
+is completely justified. We audited every formula in `train_vault_v2_4.py` and `bench_vault_traditional.py`.
+There is NO bug in the evaluator math — instead, FOUR different scales/denominators are being printed:
+
+REASON A — Training prints 4 different loss units (3 of them are NOT unmasked nats/token!):
+  1) `BPB = 1.4554` is BITS-PER-BYTE, NOT cross-entropy nats/token!
+     If `1.4554` were nats/token, PPL would be `exp(1.4554) = 4.29`.
+     In reality:
+       NLL_nats_per_token = BPB * ln(2) * (UTF8_bytes_per_token)
+     - On `Holdout English` (6 dense CS paragraphs, 5.621 bytes/tok, 60-tok cold start):
+       NLL/tok = 1.4554 * 0.69315 * 5.6208 = 5.670 nats/tok  ==>  exp(5.670) = 290.13 TokPPL!
+     - On `WikiText-2` (4.244 bytes/tok):
+       NLL/tok = 1.5447 * 0.69315 * 4.244  = 4.543 nats/tok  ==>  exp(4.543) =  93.97 NativeTok_PPL!
+  2) `ni_w = 0.253` (`exp(0.253) = 1.29` PPL) is MASKED ONLY to the 4-digit NIAH code (`CHK-3213`).
+  3) `sk = 1.020` (`exp(1.020) = 2.77` PPL) is MASKED ONLY to structured ChatML code/math answers.
+  4) `tr_p = 3.18 - 3.81` nats/tok (val `pr_ce = 3.285` nats/tok) IS the true unmasked prose loss!
+     And `exp(3.285) = 26.72`, which matches `pr_PPL = 26.72` to the second decimal place.
+
+REASON B — In-Domain Textbook Prose (`26.72` TokPPL) vs Out-of-Domain Raw WikiText-2 (`93.97` TokPPL):
+  - `26.72` TokPPL = `3.285 nats/tok` (in-distribution textbook/STEM prose).
+  - `93.97` TokPPL = `4.543 nats/tok` (`wikitext-2-raw-v1`), which is `+1.26 nats/tok` higher because:
+    (i)  `wikitext-2-raw-v1` uses Penn-Treebank detached punctuation (`@-@`, `@,@`, `@.@`, `= = Header = =`)
+         that NEVER appears in VAULT's clean textbook/code corpus (every `@-@` spikes 8-12 nats).
+    (ii) Total token budget: VAULT has trained on `0.575B` tokens total (heavily STEM + code + NIAH),
+         whereas Mamba-1/2 trained on `300B`, Mamba-3 on `100B`, and SmolLM on `600B` (`170x-1,000x` more
+         general web/encyclopedia facts, proper nouns, dates, history/sports/pop-culture).
+
+REASON C — Why `WikiText-2 Word_PPL = 311.48` is 3.3x `NativeTok_PPL = 93.97` (EXPONENTIATION):
+  - SmolLM's BPE tokenizer splits `241,218` WikiText-2 whitespace words into `304,837` BPE tokens
+    (`1.2638` tokens per word).
+  - Dividing total NLL by words instead of tokens happens INSIDE `exp(...)`, which raises PPL to a POWER:
+      Word_PPL = exp(NLL / words) = (NativeTok_PPL)^(tokens / words) = (93.97)^(1.2638) = 311.48
+  - Even SmolLM-135M (600B tok) jumps from `17.26` NativeTok_PPL to `36.60` Word_PPL (`17.26^1.33`).
+
+REASON D — Why `LAMBADA TargetWord_PPL = 1215.13` is over 1,000:
+  - LAMBADA does NOT compute perplexity over the passage. It sums log-prob across ALL subwords of ONLY the
+    final word of 1,500 novel/fiction passages (`mean_final_word_nll = 7.103 nats` across ~2.5 subwords
+    ==> `exp(7.103) = 1215.13`, `acc = 12.27%`). Predicting unseen fiction character names / final nouns
+    zero-shot requires broad web/book pretraining scale (`100B+` tokens).
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+6. COMPLETED PRE-SFT LONG-CONTEXT & MITOSIS BASELINE (STEP 10,000 / STEP 9,150 BEST)
+----------------------------------------------------------------------------------------------------
+Controlled 2K Gaps:
+  - oneshot_base : 3t_compact = 16/16 (100.0%, 0.00b) | 15t_boilerplate = 15/16 (93.8%, 0.23b) | 24t_wide = 14/16 (87.5%, 0.90b)
+  - chatml_vault : 3t_compact = 16/16 (100.0%, 0.00b) | 15t_boilerplate = 15/16 (93.8%, 0.35b) | 24t_wide = 13/16 (81.2%, 0.93b)
+
+Adversarial >=8-Token Sibling Disentanglement (7-BPE-Token Identical Prefix Collision Stress Test):
+  - oneshot_base : 2K = 12/16 (75.0%, 1.18b) | 4K = 8/12 (66.7%, 1.54b)
+  - chatml_vault : 2K = 12/16 (75.0%, 1.04b) | 4K = 7/12 (58.3%, 1.66b)
+
+Native 220c Streaming Extrapolation (2K -> 128K):
+  - 220c_oneshot : 2K=100.0% (0.00b) | 4K=100.0% (0.06b) | 8K=100.0% (0.01b) | 16K=62.5% (1.11b) | 32K=66.7% (2.60b) | 64K=0.0% (9.29b)  | 128K=0.0% (11.36b)
+  - 220c_chatml  : 2K=100.0% (0.00b) | 4K=91.7%  (0.21b) | 8K=100.0% (0.03b) | 16K=62.5% (1.17b) | 32K=66.7% (3.11b) | 64K=0.0% (10.00b) | 128K=0.0% (11.21b)
+
+Zero-Shot Elastic Co-Prime Mitosis (32K -> 128K, Pre-SFT Non-Stationary Prefix-Mean GTRM):
+  - 508c  (oneshot / chatml): 32K = 50.0% / 50.0% (2.15b / 2.70b) | 64K =  0.0% / 0.0% | 128K = 0.0% / 0.0%
+  - 942c  (oneshot / chatml): 32K = 66.7% / 66.7% (2.17b / 2.64b) | 64K = 16.7% / 0.0% | 128K = 0.0% / 0.0%
+  - 2002c (oneshot / chatml): 32K = 66.7% / 50.0% (1.91b / 2.59b) | 64K =  0.0% / 0.0% | 128K = 0.0% / 0.0%
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+7. POST-SFT VAULT v2.5 vs PRE-SFT VAULT v2.4 (STEP 10K) — FULL HEAD-TO-HEAD SCORE SHEET
+----------------------------------------------------------------------------------------------------
+Post-SFT Checkpoint: /home/phil/.gemini/antigravity/scratch/vault/checkpoints/vault_v2_5_best.pt
+  - Promoted Checkpoint : ema_step_600 (180.58M params, 220c, BPB <= 1.4630 guardrail active)
+  - SFT Schedule Run    : 1,400 steps @ L=2,048 + 400 steps @ L=4,096 (59.0M tokens, Polyak EMA)
+  - Comparison JSON     : /home/phil/.gemini/antigravity/scratch/vault/benchmarks/comparison_v2_4_step10k_vs_v2_5_sft.json
+
+A) LANGUAGE MODELING & TRADITIONAL 10-TASK ZERO-SHOT SUITE (IDENTICAL PROTOCOL)
+Metric / Task                     Pre-SFT v2.4 (10k)   Post-SFT v2.5        Delta / Verdict
+-------------------------------   ------------------   ------------------   -------------------------
+Holdout English BPB (6 CS cold)   1.4554               1.4625               +0.0071 (within <=1.4630)
+Holdout English NativeTok_PPL     290.13               298.25               +8.12
+Unseen Edu Prose 2K PPL           30.29 (3.411 nats)   30.90 (3.431 nats)   +0.61 (+0.020 nats)
+WikiText-2 BPB (bits/byte)        1.5447               1.5466               +0.0019 (zero forgetting)
+WikiText-2 NativeTok_PPL          93.97                94.51                +0.54
+WikiText-2 Word_PPL (Merity)      311.48               313.75               +2.27
+LAMBADA Final-Word Acc (%)        12.27%               13.73%               +1.46%  [IMPROVED]
+LAMBADA TargetWord_PPL            1215.13              1100.03              -115.10 [IMPROVED]
+ARC-Easy Acc / Acc_Norm (%)       41.37% / 37.71%      46.34% / 45.37%      +4.97% / +7.66% [IMPROVED]
+ARC-Challenge Acc / Acc_Norm (%)  18.94% / 23.12%      19.37% / 23.72%      +0.43% / +0.60% [IMPROVED]
+SciQ w/ Passage Acc / Norm (%)    56.30% / 50.40%      71.80% / 71.80%      +15.50% / +21.40% [IMPROVED]
+SciQ Closed-Book Acc / Norm (%)   37.50% / 37.00%      49.40% / 50.70%      +11.90% / +13.70% [IMPROVED]
+SciQ In-Context Gain (Norm / Raw) +13.40% / +18.80%    +21.10% / +22.40%    +7.70%  [BEATS MAMBA-2/3 & SMOLLM]
+PIQA Acc / Acc_Norm (%)           58.92% / 57.02%      59.09% / 58.22%      +0.17% / +1.20% [IMPROVED]
+HellaSwag Acc / Acc_Norm (%)      31.80% / 35.73%      31.67% / 37.13%      -0.13% / +1.40% [IMPROVED]
+Winogrande Acc (%)                49.64%               50.43%               +0.79%  [IMPROVED]
+BoolQ Acc / Acc_Norm (%)          56.93% / 62.93%      41.53% / 51.33%      -15.40% / -11.60% [REGRESSED]
+-------------------------------   ------------------   ------------------   -------------------------
+9-Task Zero-Shot Average (%)      39.98%               43.63%               +3.65%  [8 OF 9 IMPROVED]
+
+B) ZERO-ROCFFT TRITON KERNEL PARITY & O(1) STREAMING DECODE LATENCY (RX 9060 XT)
+- v2.5 FP32 Triton Decode Parity (t=0..255 across rollovers t=128, 192):
+  Prefill max_diff = 5.913e-05 | 128-step Decode median_diff = 2.459e-05 | Top-1 Match = 100.00%
+- O(1) Decode Latency (ms/tok) & Throughput:
+  Config @ Context   Pre-SFT v2.4 (rocFFT)           Post-SFT v2.5 (Zero-rocFFT Triton)   Speedup
+  220c   @   2K      26.93 ms/tok (37.1 tok/s)       20.61 ms/tok (48.5 tok/s, 227.3 MB)  1.31x
+  220c   @   8K      26.61 ms/tok (37.6 tok/s)       20.45 ms/tok (48.9 tok/s, 227.3 MB)  1.30x
+  220c   @  32K      26.59 ms/tok (37.6 tok/s)       20.50 ms/tok (48.8 tok/s, 227.3 MB)  1.30x
+  220c   @  64K      26.59 ms/tok (37.6 tok/s)       20.47 ms/tok (48.8 tok/s, 227.3 MB)  1.30x
+  220c   @ 128K      26.63 ms/tok (37.6 tok/s)       20.53 ms/tok (48.7 tok/s, 227.3 MB)  1.30x
+  2002c  @   2K      26.62 ms/tok (37.6 tok/s)       20.61 ms/tok (48.5 tok/s, 2009.7 MB) 1.29x
+  2002c  @ 128K      26.61 ms/tok (37.6 tok/s)       20.59 ms/tok (48.6 tok/s, 2009.7 MB) 1.29x
+
+C) CONTROLLED 2K GAPS & ADVERSARIAL >=8-TOKEN SIBLING DISENTANGLEMENT (g2 m=1..10)
+- Controlled 2K Gaps (Exact Acc % / Code NLL bits):
+  oneshot_base | 3t_compact      : 100.0% (0.00b) -> 100.0% (0.01b) [+0.0%]
+  oneshot_base | 15t_boilerplate :  93.8% (0.23b) ->  93.8% (0.21b) [+0.0%, -0.02b NLL]
+  oneshot_base | 24t_wide        :  87.5% (0.90b) ->  87.5% (0.57b) [+0.0%, -0.33b NLL]
+  chatml_vault | 3t_compact      : 100.0% (0.00b) -> 100.0% (0.00b) [+0.0%]
+  chatml_vault | 15t_boilerplate :  93.8% (0.35b) ->  93.8% (0.26b) [+0.0%, -0.09b NLL]
+  chatml_vault | 24t_wide        :  81.2% (0.93b) ->  81.2% (0.73b) [+0.0%, -0.20b NLL]
+
+- Held-Out Adversarial >=8-Subword Sibling NIAH (>=7 Shared Prefix BPE Tokens):
+  oneshot_base | 2K : 75.0% (1.18b) -> 68.8% (1.34b) [-6.2%]
+  oneshot_base | 4K : 66.7% (1.54b) -> 75.0% (0.90b) [+8.3%,  -0.64b NLL IMPROVED]
+  chatml_vault | 2K : 75.0% (1.04b) -> 81.2% (1.32b) [+6.2%   IMPROVED]
+  chatml_vault | 4K : 58.3% (1.66b) -> 75.0% (0.96b) [+16.7%, -0.70b NLL IMPROVED]
+
+D) EXTREME 2K -> 128K EXTRAPOLATION & ZERO-SHOT CO-PRIME MITOSIS (LEAKY-EMA GTRM)
+  Config                 Context   Pre-SFT v2.4 (Acc / NLL)   Post-SFT v2.5 (Acc / NLL)   Delta
+  220c_oneshot             2K      100.0% ( 0.00b)             91.7% ( 0.22b)             -8.3%
+  220c_oneshot             4K      100.0% ( 0.06b)            100.0% ( 0.06b)             +0.0%
+  220c_oneshot             8K      100.0% ( 0.01b)             87.5% ( 0.42b)            -12.5%
+  220c_oneshot            16K       62.5% ( 1.11b)             50.0% ( 1.79b)            -12.5%
+  220c_oneshot            32K       66.7% ( 2.60b)             50.0% ( 2.67b)            -16.7%
+  220c_oneshot            64K        0.0% ( 9.29b)              0.0% ( 7.04b)             +0.0% (-2.25b NLL)
+  220c_oneshot           128K        0.0% (11.36b)              0.0% (11.31b)             +0.0% (-0.05b NLL)
+  220c_chatml              2K      100.0% ( 0.00b)             91.7% ( 0.20b)             -8.3%
+  220c_chatml              4K       91.7% ( 0.21b)             83.3% ( 0.35b)             -8.3%
+  220c_chatml              8K      100.0% ( 0.03b)             87.5% ( 0.36b)            -12.5%
+  220c_chatml             16K       62.5% ( 1.17b)             50.0% ( 1.80b)            -12.5%
+  220c_chatml             32K       66.7% ( 3.11b)             66.7% ( 3.05b)             +0.0% (-0.06b NLL)
+  220c_chatml             64K        0.0% (10.00b)              0.0% ( 7.66b)             +0.0% (-2.35b NLL)
+  220c_chatml            128K        0.0% (11.21b)              0.0% (11.35b)             +0.0%
+  Mitosis_508c_oneshot    32K       50.0% ( 2.15b)             50.0% ( 2.34b)             +0.0%
+  Mitosis_508c_oneshot    64K        0.0% ( 7.94b)             16.7% ( 6.08b)            +16.7% (-1.85b NLL)
+  Mitosis_508c_oneshot   128K        0.0% ( 9.97b)              0.0% ( 9.81b)             +0.0% (-0.16b NLL)
+  Mitosis_508c_chatml     32K       50.0% ( 2.70b)             66.7% ( 2.49b)            +16.7% (-0.21b NLL)
+  Mitosis_508c_chatml     64K        0.0% ( 7.78b)              0.0% ( 6.37b)             +0.0% (-1.41b NLL)
+  Mitosis_508c_chatml    128K        0.0% (10.20b)              0.0% (10.01b)             +0.0% (-0.19b NLL)
+  Mitosis_942c_oneshot    32K       66.7% ( 2.17b)             66.7% ( 2.27b)             +0.0%
+  Mitosis_942c_oneshot    64K       16.7% ( 7.88b)              0.0% ( 4.78b)            -16.7% (-3.10b NLL)
+  Mitosis_942c_oneshot   128K        0.0% ( 9.41b)              0.0% ( 8.44b)             +0.0% (-0.97b NLL)
+  Mitosis_942c_chatml     32K       66.7% ( 2.64b)             33.3% ( 2.79b)            -33.3%
+  Mitosis_942c_chatml     64K        0.0% ( 8.71b)              0.0% ( 5.88b)             +0.0% (-2.83b NLL)
+  Mitosis_942c_chatml    128K        0.0% ( 9.53b)              0.0% ( 9.27b)             +0.0% (-0.26b NLL)
+  Mitosis_2002c_oneshot   32K       66.7% ( 1.91b)             83.3% ( 1.77b)            +16.7% (-0.14b NLL)
+  Mitosis_2002c_oneshot   64K        0.0% ( 8.62b)              0.0% ( 5.89b)             +0.0% (-2.73b NLL)
+  Mitosis_2002c_oneshot  128K        0.0% ( 9.61b)              0.0% ( 8.96b)             +0.0% (-0.64b NLL)
+  Mitosis_2002c_chatml    32K       50.0% ( 2.59b)             66.7% ( 2.22b)            +16.7% (-0.37b NLL)
+  Mitosis_2002c_chatml    64K        0.0% ( 7.55b)              0.0% ( 6.00b)             +0.0% (-1.55b NLL)
+  Mitosis_2002c_chatml   128K        0.0% ( 8.85b)              0.0% ( 8.68b)             +0.0% (-0.17b NLL)
+
+E) VERBATIM 8-DOMAIN SIDE-BY-SIDE DECODED OUTPUTS (PRE-SFT STEP 10K vs POST-SFT v2.5)
+Summary Flags:
+  - Pre-SFT  v2.4@10k : NIAH=2/2 | Math(180)=True | DirectProse=False | IDs(Photon=True, FixedStack=True, Particle=True)
+  - Post-SFT v2.5     : NIAH=2/2 | Math(180)=True | DirectProse=True  | IDs(Photon=True, FixedStack=True, Particle=True)
+
+[Task 1 — BuildBit (.bb) GPU SoA]
+  Pre-SFT : soa struct Photon { x: f32, vx: f32, ax: f32 } ... alloc_soa(arena, Photon, 1024) ...
+  Post-SFT: soa struct Photon { x: f32, vx: f32, ax: f32 } ... alloc_soa(arena, Photon, 2048) ...
+
+[Task 2 — C99 `reverse` in-place] (REGRESSED at ema_step_600)
+  Pre-SFT : Clean `while (lo < hi)` swap (`int tmp = arr[lo]; arr[lo] = arr[hi]; arr[hi] = tmp;`).
+  Post-SFT: Emits buggy `if (arr[i] != arr[i - 1]) { arr[i] = arr[i - 1]; }` + `main()` stub.
+
+[Task 3 — C++20 `FixedStack<T, 128>`] (IDENTICAL EXACT PASS)
+  Pre-SFT & Post-SFT: Exact `template <typename T, std::size_t Capacity = 128> class FixedStack` with bounds-checked `push`, `pop`, and `[[nodiscard]] constexpr std::size_t size()`.
+
+[Task 4 — Python `max_and_sum`] (FIXED PRIOR CONTAMINATION!)
+  Pre-SFT : `... return maximum, total / len(nums)` (mean reflex contamination)
+  Post-SFT: `... return maximum, total`             (EXACT specification adherence)
+
+[Task 5 — Lua `Particle` metatable] (PHYSICS IMPROVED, `localParticle` GLUE PERSISTS)
+  Pre-SFT : `localParticle = {}` with `angle/omega` fields.
+  Post-SFT: `localParticle = {}` with `pos, vel, acc` Euler integration (`self.vel = self.vel + self.acc * dt`), but space-less backticked `'Particle'` token copy-cone glue remains because `x0` SVD basis is frozen.
+
+[Task 6 — Chain-of-Thought Math (`<think>`)] (IDENTICAL EXACT PASS)
+  Pre-SFT & Post-SFT: `<think> Distance equals speed multiplied by time (45 * 4). Break 45 into 40 + 5: 45 * 4 = (40 * 4) + (5 * 4) = 160 + 20 = 180. </think> The rover travels 180 miles in total.`
+
+[Task 7 — Unseen CS Prose Explanation (Recursion Base Case)] (FIXED UNCONSTRAINED PROSE DRIFT!)
+  Pre-SFT : `"Divide a large number by a base case in programming allows you to make the same number of recursive calls..."` (`DirectProse=False`)
+  Post-SFT: `"Each active function invocation pushes a stack frame holding return addresses, saved registers, and local variables onto a finite call stack in RAM. Without an explicit stopping condition that returns a direct value at a trivial input size, nested calls keep allocating frames until the thread exhausts its stack region and faults with a stack overflow."` (`DirectProse=True`)
+
+[Task 8 — Unseen 2K +15-Tok-Gap Multi-Needle NIAH] (IDENTICAL 2/2 EXACT PASS)
+  Pre-SFT & Post-SFT: `- PlasmaGrid-E6: CHK-3213\n- CryoLock-N6: CHK-4811`
+====================================================================================================

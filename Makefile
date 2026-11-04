@@ -5,7 +5,7 @@ PYTHON ?= $(shell if [ -x ../venv/bin/python ]; then echo ../venv/bin/python; el
 
 PRIME_MOMENT_SRC ?= ../PRIME-Moment-Attention/c/prime_moment.c
 
-.PHONY: all bench torture test test-flash bench-flash sft-flash upgrade-flash deep2k-sft test-v2 data-v2 train-v2 eval-v2 clean
+.PHONY: all bench torture test test-flash bench-flash sft-flash upgrade-flash deep2k-sft test-v2 data-v2 train-v2 eval-v2 run demo test-v2-5 bench-v2-5 clean
 
 all: c/bench_vault c/torture_vault c/libvault.so
 
@@ -54,6 +54,18 @@ train-v2:
 
 eval-v2:
 	$(PYTHON) -u benchmarks/eval_vault_v2_standalone.py
+
+run:
+	$(PYTHON) -u run_vault.py
+
+demo:
+	$(PYTHON) -u run_vault.py --demo
+
+test-v2-5:
+	$(PYTHON) -u tests/test_vault_v2_5_cpu.py
+
+bench-v2-5:
+	bash run_post10k_v2_5_pipeline.sh
 
 clean:
 	rm -f c/bench_vault c/torture_vault c/libvault.so

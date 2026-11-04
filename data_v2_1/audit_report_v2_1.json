@@ -1,0 +1,19 @@
+{
+  "rejected_benchmark_holdout": 0,
+  "rejected_code_review_poison": 592,
+  "adapt_rows_by_domain": {
+    "open_vocab_niah": 5201,
+    "prompt_bound_polyglot_code": 4801,
+    "distributive_think_math": 2800,
+    "plain_english_qa": 2201
+  },
+  "sft_rows_by_domain": {
+    "open_vocab_niah": 3001,
+    "prompt_bound_polyglot_code": 3001,
+    "distributive_think_math": 1801,
+    "plain_english_qa": 1401
+  },
+  "total_adapt_train_tokens": 29906944,
+  "total_sft_train_tokens": 18030592,
+  "elapsed_seconds": 122.24
+}

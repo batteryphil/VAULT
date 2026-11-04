@@ -1,0 +1,24 @@
+{
+  "open_vocab_stem_pool_size": 17904,
+  "niah_sft_mode_everywhere": true,
+  "python_distinct_tasks": 29,
+  "lua_distinct_classes": 42,
+  "lua_distinct_methods": 11,
+  "rejected_benchmark_holdout": 0,
+  "rejected_code_review_poison": 592,
+  "adapt_rows_by_domain": {
+    "open_vocab_niah": 4801,
+    "prompt_bound_polyglot_code": 4801,
+    "distributive_think_math": 2601,
+    "plain_english_qa": 2201
+  },
+  "sft_rows_by_domain": {
+    "open_vocab_niah": 3001,
+    "prompt_bound_polyglot_code": 3201,
+    "distributive_think_math": 1801,
+    "plain_english_qa": 1401
+  },
+  "total_adapt_train_tokens": 28680192,
+  "total_sft_train_tokens": 18440192,
+  "elapsed_seconds": 119.18
+}

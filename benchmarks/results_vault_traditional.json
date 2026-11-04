@@ -1,0 +1,729 @@
+{
+  "benchmark": "Traditional Academic Zero-Shot LM Benchmark Suite (EleutherAI lm-eval Protocol)",
+  "hardware": "AMD Radeon RX 9060 XT",
+  "max_large_split": 1500,
+  "timestamp_start": "2026-11-02T14:53:03-0600",
+  "models": {
+    "VAULT_v2_0_Pretrain_180M": {
+      "title": "VAULT v2.0 Pretrain (180.4M, 88c, 0.24B tok)",
+      "params": 151329440,
+      "params_M": 151.33,
+      "pretrain_tokens_B": 0.244,
+      "wikitext2": {
+        "bpb": 1.6858,
+        "word_ppl": 526.24,
+        "native_tok_ppl": 142.3,
+        "evaluated_tokens": 304837,
+        "eval_sec": 22.83
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 10.33,
+        "target_word_ppl": 2824.67,
+        "eval_sec": 10.43
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 36.7,
+          "acc_norm": 34.89,
+          "eval_sec": 28.39
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 18.0,
+          "acc_norm": 22.44,
+          "eval_sec": 14.8
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 45.7,
+          "acc_norm": 43.7,
+          "eval_sec": 29.49
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 29.9,
+          "acc_norm": 29.9,
+          "eval_sec": 11.2
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 58.16,
+          "acc_norm": 56.69,
+          "eval_sec": 12.21
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 31.67,
+          "acc_norm": 36.2,
+          "eval_sec": 18.6
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 50.91,
+          "acc_norm": 50.91,
+          "eval_sec": 7.1
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 63.2,
+          "acc_norm": 63.07,
+          "eval_sec": 28.36
+        }
+      },
+      "sciq_in_context_gain_pct": 13.8,
+      "zero_shot_9task_avg_pct": 38.7,
+      "total_eval_sec": 185.7
+    },
+    "VAULT_v2_2_180M": {
+      "title": "VAULT v2.2 (180.4M, 88c, 0.26B tok)",
+      "params": 180377248,
+      "params_M": 180.38,
+      "pretrain_tokens_B": 0.26,
+      "wikitext2": {
+        "bpb": 1.7702,
+        "word_ppl": 720.16,
+        "native_tok_ppl": 182.4,
+        "evaluated_tokens": 304837,
+        "eval_sec": 22.67
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 8.47,
+        "target_word_ppl": 5822.43,
+        "eval_sec": 13.03
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 35.73,
+          "acc_norm": 35.9,
+          "eval_sec": 47.32
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 17.83,
+          "acc_norm": 23.72,
+          "eval_sec": 24.18
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 43.7,
+          "acc_norm": 43.0,
+          "eval_sec": 40.01
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 29.4,
+          "acc_norm": 31.3,
+          "eval_sec": 19.26
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 58.27,
+          "acc_norm": 56.26,
+          "eval_sec": 19.66
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 31.0,
+          "acc_norm": 35.4,
+          "eval_sec": 30.67
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 51.46,
+          "acc_norm": 51.46,
+          "eval_sec": 12.35
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 62.93,
+          "acc_norm": 63.07,
+          "eval_sec": 37.07
+        }
+      },
+      "sciq_in_context_gain_pct": 11.7,
+      "zero_shot_9task_avg_pct": 38.72,
+      "total_eval_sec": 270.2
+    },
+    "VAULT_v2_3_180M": {
+      "title": "VAULT v2.3 (180.5M, 220c, 0.28B tok)",
+      "params": 180512416,
+      "params_M": 180.51,
+      "pretrain_tokens_B": 0.275,
+      "wikitext2": {
+        "bpb": 1.7649,
+        "word_ppl": 706.04,
+        "native_tok_ppl": 179.56,
+        "evaluated_tokens": 304837,
+        "eval_sec": 24.5
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 8.27,
+        "target_word_ppl": 6036.0,
+        "eval_sec": 14.69
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 35.86,
+          "acc_norm": 35.31,
+          "eval_sec": 48.31
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 18.43,
+          "acc_norm": 23.04,
+          "eval_sec": 24.49
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 44.0,
+          "acc_norm": 43.6,
+          "eval_sec": 44.21
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 29.5,
+          "acc_norm": 31.3,
+          "eval_sec": 19.08
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 58.49,
+          "acc_norm": 56.58,
+          "eval_sec": 20.03
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 30.8,
+          "acc_norm": 35.33,
+          "eval_sec": 30.89
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 51.14,
+          "acc_norm": 51.14,
+          "eval_sec": 12.17
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 62.8,
+          "acc_norm": 63.13,
+          "eval_sec": 41.8
+        }
+      },
+      "sciq_in_context_gain_pct": 12.3,
+      "zero_shot_9task_avg_pct": 38.6,
+      "total_eval_sec": 284.3
+    },
+    "VAULT_v2_4_180M": {
+      "title": "VAULT v2.4 (180.5M, 220c, 0.504B tok, Step 7000)",
+      "params": 180512416,
+      "params_M": 180.51,
+      "pretrain_tokens_B": 0.504,
+      "wikitext2": {
+        "bpb": 1.5551,
+        "word_ppl": 323.8,
+        "native_tok_ppl": 96.9,
+        "evaluated_tokens": 304837,
+        "eval_sec": 28.38
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 12.33,
+        "target_word_ppl": 1241.3,
+        "eval_sec": 14.78
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 41.29,
+          "acc_norm": 38.01,
+          "eval_sec": 47.16
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 18.77,
+          "acc_norm": 23.81,
+          "eval_sec": 24.32
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 55.5,
+          "acc_norm": 49.9,
+          "eval_sec": 44.03
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 37.6,
+          "acc_norm": 36.6,
+          "eval_sec": 19.02
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 59.14,
+          "acc_norm": 57.56,
+          "eval_sec": 19.92
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 32.27,
+          "acc_norm": 36.4,
+          "eval_sec": 30.7
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 51.07,
+          "acc_norm": 51.07,
+          "eval_sec": 12.14
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 52.6,
+          "acc_norm": 62.67,
+          "eval_sec": 41.62
+        }
+      },
+      "sciq_in_context_gain_pct": 13.3,
+      "zero_shot_9task_avg_pct": 39.81,
+      "total_eval_sec": 286.2
+    },
+    "Mamba1_130M": {
+      "title": "Mamba-1 (130.9M, 300B tok)",
+      "params": 129135360,
+      "params_M": 129.14,
+      "pretrain_tokens_B": 300.0,
+      "wikitext2": {
+        "bpb": 0.9723,
+        "word_ppl": 37.1,
+        "native_tok_ppl": 20.47,
+        "evaluated_tokens": 288720,
+        "eval_sec": 11.02
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 42.33,
+        "target_word_ppl": 16.2,
+        "eval_sec": 6.34
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 47.69,
+          "acc_norm": 42.26,
+          "eval_sec": 18.75
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 20.56,
+          "acc_norm": 24.74,
+          "eval_sec": 9.62
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 78.3,
+          "acc_norm": 69.4,
+          "eval_sec": 18.1
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 49.7,
+          "acc_norm": 45.7,
+          "eval_sec": 7.3
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 64.64,
+          "acc_norm": 63.6,
+          "eval_sec": 7.79
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 34.73,
+          "acc_norm": 41.73,
+          "eval_sec": 12.4
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 52.41,
+          "acc_norm": 52.41,
+          "eval_sec": 4.7
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 58.27,
+          "acc_norm": 61.8,
+          "eval_sec": 14.0
+        }
+      },
+      "sciq_in_context_gain_pct": 23.7,
+      "zero_shot_9task_avg_pct": 48.94,
+      "total_eval_sec": 110.8
+    },
+    "Mamba2_130M": {
+      "title": "Mamba-2 (129.7M, 300B tok)",
+      "params": 128989632,
+      "params_M": 128.99,
+      "pretrain_tokens_B": 300.0,
+      "wikitext2": {
+        "bpb": 0.9645,
+        "word_ppl": 36.04,
+        "native_tok_ppl": 19.98,
+        "evaluated_tokens": 288720,
+        "eval_sec": 20.36
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 42.93,
+        "target_word_ppl": 16.93,
+        "eval_sec": 20.11
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 47.26,
+          "acc_norm": 42.38,
+          "eval_sec": 40.23
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 21.67,
+          "acc_norm": 23.81,
+          "eval_sec": 21.67
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 80.9,
+          "acc_norm": 73.2,
+          "eval_sec": 51.22
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 53.4,
+          "acc_norm": 46.7,
+          "eval_sec": 15.37
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 63.98,
+          "acc_norm": 63.71,
+          "eval_sec": 18.09
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 35.47,
+          "acc_norm": 43.07,
+          "eval_sec": 27.04
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 53.28,
+          "acc_norm": 53.28,
+          "eval_sec": 9.53
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 56.33,
+          "acc_norm": 61.4,
+          "eval_sec": 46.34
+        }
+      },
+      "sciq_in_context_gain_pct": 26.5,
+      "zero_shot_9task_avg_pct": 49.49,
+      "total_eval_sec": 272.2
+    },
+    "Mamba3_MIMO_187M": {
+      "title": "Mamba-3 MIMO (187.3M, 100B tok)",
+      "params": 187291968,
+      "params_M": 187.29,
+      "pretrain_tokens_B": 100.0,
+      "wikitext2": {
+        "bpb": 1.0274,
+        "word_ppl": 45.55,
+        "native_tok_ppl": 24.24,
+        "evaluated_tokens": 288935,
+        "eval_sec": 60.59
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 33.47,
+        "target_word_ppl": 34.88,
+        "eval_sec": 37.81
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 62.5,
+          "acc_norm": 57.87,
+          "eval_sec": 142.14
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 26.19,
+          "acc_norm": 29.44,
+          "eval_sec": 72.44
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 83.5,
+          "acc_norm": 80.4,
+          "eval_sec": 119.65
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 66.1,
+          "acc_norm": 63.1,
+          "eval_sec": 57.93
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 68.44,
+          "acc_norm": 67.74,
+          "eval_sec": 59.57
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 36.93,
+          "acc_norm": 45.33,
+          "eval_sec": 91.54
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 49.09,
+          "acc_norm": 49.09,
+          "eval_sec": 36.56
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 57.4,
+          "acc_norm": 63.0,
+          "eval_sec": 103.91
+        }
+      },
+      "sciq_in_context_gain_pct": 17.3,
+      "zero_shot_9task_avg_pct": 53.76,
+      "total_eval_sec": 785.2
+    },
+    "Transformer_SmolLM_135M": {
+      "title": "Transformer SmolLM-135M (134.5M, 600B tok)",
+      "params": 134515008,
+      "params_M": 134.52,
+      "pretrain_tokens_B": 600.0,
+      "wikitext2": {
+        "bpb": 0.9686,
+        "word_ppl": 36.6,
+        "native_tok_ppl": 17.26,
+        "evaluated_tokens": 304837,
+        "eval_sec": 7.85
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 36.87,
+        "target_word_ppl": 32.96,
+        "eval_sec": 3.9
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 61.7,
+          "acc_norm": 57.41,
+          "eval_sec": 14.46
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 25.94,
+          "acc_norm": 28.92,
+          "eval_sec": 7.41
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 83.3,
+          "acc_norm": 76.4,
+          "eval_sec": 12.28
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 69.9,
+          "acc_norm": 64.7,
+          "eval_sec": 5.71
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 68.06,
+          "acc_norm": 68.44,
+          "eval_sec": 6.07
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 35.93,
+          "acc_norm": 45.6,
+          "eval_sec": 9.54
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 52.72,
+          "acc_norm": 52.72,
+          "eval_sec": 3.67
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 59.87,
+          "acc_norm": 63.2,
+          "eval_sec": 11.32
+        }
+      },
+      "sciq_in_context_gain_pct": 11.7,
+      "zero_shot_9task_avg_pct": 54.55,
+      "total_eval_sec": 82.9
+    },
+    "VAULT_v2_4_Step10000_180M": {
+      "title": "VAULT v2.4 Step 10k (180.5M, 220c, 0.575B tok, Step 9150)",
+      "params": 180512416,
+      "params_M": 180.51,
+      "pretrain_tokens_B": 0.575,
+      "wikitext2": {
+        "bpb": 1.5447,
+        "word_ppl": 311.48,
+        "native_tok_ppl": 93.97,
+        "evaluated_tokens": 304837,
+        "eval_sec": 28.48
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 12.27,
+        "target_word_ppl": 1215.13,
+        "eval_sec": 14.75
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 41.37,
+          "acc_norm": 37.71,
+          "eval_sec": 46.35
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 18.94,
+          "acc_norm": 23.12,
+          "eval_sec": 23.96
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 56.3,
+          "acc_norm": 50.4,
+          "eval_sec": 44.12
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 37.5,
+          "acc_norm": 37.0,
+          "eval_sec": 18.99
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 58.92,
+          "acc_norm": 57.02,
+          "eval_sec": 19.92
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 31.8,
+          "acc_norm": 35.73,
+          "eval_sec": 30.62
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 49.64,
+          "acc_norm": 49.64,
+          "eval_sec": 12.15
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 56.93,
+          "acc_norm": 62.93,
+          "eval_sec": 41.62
+        }
+      },
+      "sciq_in_context_gain_pct": 13.4,
+      "zero_shot_9task_avg_pct": 39.98,
+      "total_eval_sec": 285.2
+    },
+    "VAULT_v2_5_180M": {
+      "title": "VAULT v2.5 SFT (180.6M, 220c, 0.594B tok, Step 600)",
+      "params": 180577968,
+      "params_M": 180.58,
+      "pretrain_tokens_B": 0.594,
+      "wikitext2": {
+        "bpb": 1.5466,
+        "word_ppl": 313.75,
+        "native_tok_ppl": 94.51,
+        "evaluated_tokens": 304837,
+        "eval_sec": 29.42
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 13.73,
+        "target_word_ppl": 1100.03,
+        "eval_sec": 15.35
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 46.34,
+          "acc_norm": 45.37,
+          "eval_sec": 49.6
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 19.37,
+          "acc_norm": 23.72,
+          "eval_sec": 25.58
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 71.8,
+          "acc_norm": 71.8,
+          "eval_sec": 45.96
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 49.4,
+          "acc_norm": 50.7,
+          "eval_sec": 20.07
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 59.09,
+          "acc_norm": 58.22,
+          "eval_sec": 20.92
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 31.67,
+          "acc_norm": 37.13,
+          "eval_sec": 32.3
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 50.43,
+          "acc_norm": 50.43,
+          "eval_sec": 12.76
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 41.53,
+          "acc_norm": 51.33,
+          "eval_sec": 43.29
+        }
+      },
+      "sciq_in_context_gain_pct": 21.1,
+      "zero_shot_9task_avg_pct": 43.63,
+      "total_eval_sec": 298.6
+    }
+  },
+  "timestamp_last_updated": "2026-11-04T04:40:52-0600"
+}

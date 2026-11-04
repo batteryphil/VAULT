@@ -5,10 +5,14 @@ checkpoints/
 *.safetensors
 *.ckpt
 
-# Binary datasets & raw downloads (keep audit_report.json tracked)
+# Binary datasets, packed shards & HF export staging (keep small JSON manifests tracked)
 data_v2/*.bin
 data_v2/raw/
+data_v2_*/*.bin
+data_v2_*/*.npz
+data_v2_*/raw/
 data/
+hf_dist/
 
 # Compiled C binaries & shared libraries
 c/bench_vault

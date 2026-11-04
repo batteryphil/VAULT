@@ -1,0 +1,64 @@
+{
+  "stage": "VAULT_v2_1_EvalOnly",
+  "timestamp": "2026-10-30T21:22:20-0500",
+  "niah_expected": [
+    [
+      "PlasmaGrid-E6",
+      "CHK-3213"
+    ],
+    [
+      "CryoLock-N6",
+      "CHK-4811"
+    ]
+  ],
+  "niah_exact_hits": "0/2",
+  "math_180_exact": true,
+  "prose_clean_direct_english": false,
+  "identifier_fidelity": {
+    "bb_Photon": true,
+    "cpp_FixedStack": true,
+    "lua_Particle": true
+  },
+  "evaluations": [
+    {
+      "domain": "1. BuildBit (.bb) GPU SoA",
+      "prompt_tail": "Write a BuildBit (.bb) function that defines `soa struct Photon` with `f32` fields `x`, `vx`, `ax`, allocates 4096 elements in a 16 MB `gpu_arena`, and updates positions in parallel.",
+      "output": "```rust\nsoa struct Photon {\n    x: f32, vx: f32, ax: f32\n}\n\nfn update_photoncell() {\n    gpu_arena arena = 16777216\n    let items = alloc_soa(arena, Photon, 65536)\n    parallel for i in 0..65536 {\n        items[i].vx = items[i].vx + items[i].ax * 0.016\n        items[i].x = items[i].x + items[i].vx * 0.016\n    }\n    reset(arena)\n}\n```"
+    },
+    {
+      "domain": "2. C99 Systems Code",
+      "prompt_tail": "Write a C99 function to reverse an array of 32-bit integers in place.",
+      "output": "```c\n#include <stdint.h>\n#include <stddef.h>\n\nvoid reverseArray(int arr[], int size) {\n    int left = 0, right = size - 1;\n    int right = left + 1;\n\n    while (left <= right) {\n        int temp = arr[left];\n        arr[left] = arr[right];\n        arr[right] = temp;\n        left++;\n        right--;\n    }\n\n    return arr;\n}\n\nint main() {\n    int arr[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};\n    int size = sizeof(arr) / sizeof(arr[0]);\n\n    int arr[size - 1] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};\n    int size = sizeof(arr) / sizeof(arr[0]);\n\n    printf(\"Original array: %d\\n\", arr"
+    },
+    {
+      "domain": "3. C++20 Generic Template",
+      "prompt_tail": "Write a C++20 generic class template `FixedStack<T, 128>` with `push`, `pop`, and `size` methods.",
+      "output": "```cpp\n#include <array>\n#include <cstddef>\n#include <stdexcept>\n\ntemplate <typename T, std::size_t Capacity = 128>\nclass FixedStack {\n    std::array<T, Capacity> data_{};\n    std::size_t top_ = 0;\n\npublic:\n    constexpr void push(const T& value) {\n        if (top_ >= Capacity) throw std::overflow_error(\"FixedStack overflow\");\n        data_[top_++] = value;\n    }\n\n    constexpr T pop() {\n        if (top_ == 0) throw std::underflow_error(\"FixedStack underflow\");\n        return data_[--top_];\n    }\n\n    [[nodiscard]] constexpr std::size_t size() const noexcept {\n        return top_;\n    }\n};\n```"
+    },
+    {
+      "domain": "4. Python Algorithm",
+      "prompt_tail": "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+      "output": "```python\ndef max_and_sum(nums: list[float]) -> tuple[float, float]:\n    if not nums:\n        raise ValueError('nums must not be empty')\n    lo = hi = nums[0]\n    for x in nums[1:]:\n        if x < lo:\n            lo = x\n        elif x > hi:\n            hi = x\n    return lo, hi, hi - lo\n```"
+    },
+    {
+      "domain": "5. Lua Metatable Module",
+      "prompt_tail": "Write a Lua module implementing a `Particle` class using metatables (`__index` and `:update(dt)`).",
+      "output": "```lua\nlocalParticle = {}\nParticle.__index =Particle\n\nfunctionParticle.new(pos, target, gain)\n    local self = setmetatable({},Particle)\n    self.pos = pos or 0.0\n    self.target = target or 0.0\n    self.gain = gain or 4.0\n    return self\nend\n\nfunctionParticle:integrate(dt)\n    self.pos = self.pos + (self.target - self.pos) * self.gain * dt\n    return self\nend\n\nreturnParticle\n```"
+    },
+    {
+      "domain": "6. Chain-of-Thought Math (<think>)",
+      "prompt_tail": "If a rover travels at 45 miles per hour for 4 hours, how far does it travel in total?",
+      "output": "<think>\nDistance equals speed multiplied by time (45 * 4).\nBreak 45 into 40 + 5: 45 * 4 = (40 * 4) + (5 * 4) = 160 + 20 = 180.\n</think>\nThe probe travels 180 miles in total."
+    },
+    {
+      "domain": "7. Unseen CS Prose Explanation",
+      "prompt_tail": "Explain why recursion needs a base case in programming.",
+      "output": "The base case in programming is when the call stack is used to store the value at a specific index, which is the maximum number of recursive calls that can be made. In other words, if the call stack is used to store the value at a specific index, it will be used to store the value at that index.\n\nHere's an example of how recursion can be used in programming:\n\n```python\ndef recursive_call(n):\n    if n == 0:\n        return 1\n    else:\n        return n * recursive_call(n-1)\n```\n\nIn this example, the function `recursive_call` takes an integer `n` as input and returns the value at that index. If `n` is negative, it means we have reached the base case, so we return 1.\n\nHere's an example of how this function works:\n\n```python\ndef recursive_call(n):\n    if n == 0:\n        return 1\n    else:\n        return recursive_call(n-1)\n```\n\nIn this example, the function `recursive_call` takes an integer"
+    },
+    {
+      "domain": "8. 2K +15-Tok-Gap NIAH ([('PlasmaGrid-E6', 'CHK-3213'), ('CryoLock-N6', 'CHK-4811')])",
+      "prompt_tail": " across redundant optical transceivers during orbital attitude stabilization. Packet frame 118 committed without retransmission.\n\nQuestion: Based strictly on the telemetry manifest above, what are the exact verification codes for PlasmaGrid-E6 and CryoLock-N6? List each subsystem and its exact code.",
+      "output": "- meridian-d3: CHK-9092\n- CryoLock-N6: CHK-5697"
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "timestamp": "2026-10-30T21:36:34-0500",
+  "trained_seq_len": 2048,
+  "controlled_unseen_niah_2k": {
+    "Test_A_unseen_15tok_boilerplate": {
+      "gap_mode": "boilerplate_15tok",
+      "n_sections": 18,
+      "mean_prompt_tokens": 1419.8,
+      "exact_code_hits": "3/16",
+      "exact_code_acc": 0.1875,
+      "tf_digit_top1_acc": 0.5469,
+      "last_fwd_ms": 117.33,
+      "peak_infer_vram_mb": 1662.4
+    },
+    "Test_B_unseen_3tok_compact": {
+      "gap_mode": "compact_3tok",
+      "n_sections": 18,
+      "mean_prompt_tokens": 1329.8,
+      "exact_code_hits": "1/16",
+      "exact_code_acc": 0.0625,
+      "tf_digit_top1_acc": 0.5156,
+      "last_fwd_ms": 111.36,
+      "peak_infer_vram_mb": 1675.2
+    },
+    "Test_C_unseen_24tok_wide": {
+      "gap_mode": "wide_24tok",
+      "n_sections": 18,
+      "mean_prompt_tokens": 1707.8,
+      "exact_code_hits": "1/16",
+      "exact_code_acc": 0.0625,
+      "tf_digit_top1_acc": 0.6406,
+      "last_fwd_ms": 135.19,
+      "peak_infer_vram_mb": 1683.4
+    }
+  },
+  "zero_shot_extrapolation_2k_to_32k": {
+    "2K": {
+      "gap_mode": "boilerplate_15tok",
+      "n_sections": 22,
+      "mean_prompt_tokens": 1720.3,
+      "exact_code_hits": "2/12",
+      "exact_code_acc": 0.1667,
+      "tf_digit_top1_acc": 0.5,
+      "last_fwd_ms": 135.8,
+      "peak_infer_vram_mb": 1688.0
+    },
+    "4K": {
+      "gap_mode": "boilerplate_15tok",
+      "n_sections": 46,
+      "mean_prompt_tokens": 3618.2,
+      "exact_code_hits": "0/12",
+      "exact_code_acc": 0.0,
+      "tf_digit_top1_acc": 0.2917,
+      "last_fwd_ms": 273.88,
+      "peak_infer_vram_mb": 1804.9
+    },
+    "8K": {
+      "gap_mode": "boilerplate_15tok",
+      "n_sections": 96,
+      "mean_prompt_tokens": 7472.0,
+      "exact_code_hits": "0/8",
+      "exact_code_acc": 0.0,
+      "tf_digit_top1_acc": 0.375,
+      "last_fwd_ms": 565.32,
+      "peak_infer_vram_mb": 2050.5
+    },
+    "16K": {
+      "gap_mode": "boilerplate_15tok",
+      "n_sections": 196,
+      "mean_prompt_tokens": 15278.2,
+      "exact_code_hits": "0/8",
+      "exact_code_acc": 0.0,
+      "tf_digit_top1_acc": 0.1875,
+      "last_fwd_ms": 1334.42,
+      "peak_infer_vram_mb": 2546.3
+    },
+    "32K": {
+      "gap_mode": "boilerplate_15tok",
+      "n_sections": 396,
+      "mean_prompt_tokens": 30895.0,
+      "exact_code_hits": "0/6",
+      "exact_code_acc": 0.0,
+      "tf_digit_top1_acc": 0.2083,
+      "last_fwd_ms": 2956.06,
+      "peak_infer_vram_mb": 3552.5
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "created_at": "2026-11-03T09:27:05-0600",
+  "build_sec": 199.2,
+  "stats": {
+    "rejected_decontam": 4429,
+    "mc_tuples_kept": 39205,
+    "wg_pairs_kept": 7500,
+    "s1_academic_items": 56427,
+    "s3_math_items": 20067,
+    "s3_concept_items": 11800,
+    "s4_code_items": 15010
+  },
+  "splits": {
+    "sft_skill_train_2k": 8895,
+    "sft_skill_4k_train": 1201,
+    "prose_climax_train_2k": 8001,
+    "prose_climax_4k_train": 1201,
+    "niah_2k_train": 4500,
+    "niah_4k_train": 1200,
+    "mc_contrastive_train": 38605,
+    "wg_contrastive_train": 7200
+  }
+}

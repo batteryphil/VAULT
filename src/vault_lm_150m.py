@@ -81,9 +81,36 @@ class SwiGLUMLP(nn.Module):
         self.w1 = nn.Linear(d_model, d_ff, bias=False)
         self.w2 = nn.Linear(d_model, d_ff, bias=False)
         self.w3 = nn.Linear(d_ff, d_model, bias=False)
+        self._eval_cache = None
+
+    def train(self, mode: bool = True):
+        self._eval_cache = None
+        return super().train(mode)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.w3(F.silu(self.w1(x)) * self.w2(x))
+        if not self.training and not torch.is_grad_enabled():
+            comp_dt = torch.get_autocast_dtype("cuda") if (x.is_cuda and torch.is_autocast_enabled("cuda")) else x.dtype
+            key = (
+                x.device,
+                comp_dt,
+                self.w1.weight.data_ptr(),
+                self.w1.weight._version,
+                self.w2.weight.data_ptr(),
+                self.w2.weight._version,
+                self.w3.weight.data_ptr(),
+                self.w3.weight._version,
+            )
+            if self._eval_cache is None or self._eval_cache[0] != key:
+                w12 = torch.cat([self.w1.weight, self.w2.weight], dim=0).to(dtype=comp_dt).contiguous()
+                w3 = self.w3.weight.to(dtype=comp_dt).contiguous()
+                self._eval_cache = (key, w12, w3)
+            _, w12, w3 = self._eval_cache
+            x_c = x.to(dtype=comp_dt) if x.dtype != comp_dt else x
+            h1, h2 = F.linear(x_c, w12).chunk(2, dim=-1)
+            return F.linear(F.silu(h1) * h2, w3)
+        w12 = torch.cat([self.w1.weight, self.w2.weight], dim=0)
+        h1, h2 = F.linear(x, w12).chunk(2, dim=-1)
+        return self.w3(F.silu(h1) * h2)
 
 
 class VAULTAttention150M(nn.Module):

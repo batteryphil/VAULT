@@ -551,6 +551,9 @@ class VaultV2TokenBuilder:
 
         if high_salience_suffix and response.endswith(high_salience_suffix):
             prefix_part = response[: len(response) - len(high_salience_suffix)]
+            if prefix_part.endswith(" ") and not high_salience_suffix.startswith(" "):
+                prefix_part = prefix_part[:-1]
+                high_salience_suffix = " " + high_salience_suffix
             r_pre_ids = self.tok.encode(prefix_part, add_special_tokens=False)
             r_suf_ids = self.tok.encode(high_salience_suffix, add_special_tokens=False)
             a_ids = r_pre_ids + r_suf_ids + [self.im_end_id, self.eos_id]
@@ -569,7 +572,8 @@ class VaultV2TokenBuilder:
         sft_mode: bool = False,
     ) -> Tuple[List[int], List[int]]:
         """
-        Weights each retrieved value (`CHK-xxxx`) and `<|im_end|>` at `W_NEEDLE = 30` (`3.0x`)!
+        Weights each retrieved value (`CHK-xxxx`) and `<|im_end|>` at `W_NEEDLE = 30` (`3.0x`)
+        while preserving exact BPE leading-space subword merges (`'ĠCH'`, `'ĠVRF'`, etc.)!
         """
         p_ids = self.tok.encode(prompt.strip(), add_special_tokens=False)
         u_block = [self.im_start_id] + self.user_prefix + p_ids + [self.im_end_id] + self.assist_prefix + self.assist_header
@@ -579,9 +583,9 @@ class VaultV2TokenBuilder:
         a_ids: List[int] = []
         a_w: List[int] = []
         for idx, (ent, val) in enumerate(queried):
-            lead = ("" if idx == 0 else "\n") + f"- {ent}: "
+            lead = ("" if idx == 0 else "\n") + f"- {ent}:"
             lead_ids = self.tok.encode(lead, add_special_tokens=False)
-            val_ids = self.tok.encode(val, add_special_tokens=False)
+            val_ids = self.tok.encode(f" {val}", add_special_tokens=False)
             a_ids.extend(lead_ids + val_ids)
             a_w.extend(([W_ASSIST] * len(lead_ids)) + ([W_NEEDLE] * len(val_ids)))
 

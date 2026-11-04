@@ -1,0 +1,59 @@
+{
+  "stage": "pretrain_step_1000_33M",
+  "timestamp": "2026-10-29T15:29:49-0500",
+  "niah_expected": [
+    [
+      "PlasmaGrid-E6",
+      "CHK-3213"
+    ],
+    [
+      "CryoLock-N6",
+      "CHK-4811"
+    ]
+  ],
+  "niah_exact_hits": "0/2",
+  "math_180_exact": false,
+  "prose_clean_direct_english": false,
+  "evaluations": [
+    {
+      "domain": "1. BuildBit (.bb) GPU SoA",
+      "prompt_tail": "Write a BuildBit (.bb) function that defines `soa struct Photon` with `f32` fields `x`, `vx`, `ax`, allocates 4096 elements in a 16 MB `gpu_arena`, and updates positions in parallel.",
+      "output": "```rust\nsoa struct Photon {\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,\n    phase: f32,"
+    },
+    {
+      "domain": "2. C99 Systems Code",
+      "prompt_tail": "Write a C99 function to reverse an array of 32-bit integers in place.",
+      "output": "```c\n#include <stddef.h>\n#include <stddef.h>\n\nptrdiff_t binary_search(const int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6, int6"
+    },
+    {
+      "domain": "3. C++20 Generic Template",
+      "prompt_tail": "Write a C++20 generic class template `FixedStack<T, 128>` with `push`, `pop`, and `size` methods.",
+      "output": "```cpp\n#include <array>\n#include <cstddef>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>\n#include <algorithm>"
+    },
+    {
+      "domain": "4. Python Algorithm",
+      "prompt_tail": "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
+      "output": "```python\ndef find_max_value(lst):\n    if len(lst) <= 1:\n        return lst[0]\n    elif len(lst[0]) != len(lst[1]) != len(lst[1]) != len(lst[1]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len(lst[2]) != len"
+    },
+    {
+      "domain": "5. Lua Metatable Module",
+      "prompt_tail": "Write a Lua module implementing a `Particle` class using metatables (`__index` and `:update(dt)`).",
+      "output": "```lua\nlocal Rate = 0.0\n\nfunction Rate = 0.0\n\nfunction Rate = 0.0\n\nfunction Rate = 0.0\n\nfunction Rate = 0.0\n\nfunction Rate = 0.0\n\nfunction Rate = 0.0\n\nreturn Rate * 0.0\n\nreturn Rate * 0.0"
+    },
+    {
+      "domain": "6. Chain-of-Thought Math (<think>)",
+      "prompt_tail": "If a rover travels at 45 miles per hour for 4 hours, how far does it travel in total?",
+      "output": "<think>\nDistance equals speed multiplied by time.\nSpeed = 45 miles/hour\nTime = 4 hours\nTotal distance = 45 * 4 = 120 miles.\n</think>\nThe probe travels 120 miles in total."
+    },
+    {
+      "domain": "7. Unseen CS Prose Explanation",
+      "prompt_tail": "Explain why recursion needs a base case in programming.",
+      "output": "An iterative function in JavaScript is a recursive case in programming, and it requires constant time complexity and constant time complexity. The recursive case in programming is O(log n), where n is the length of the input string.\n\nHere's the implementation of the recursive case in Python:\n\n```python\ndef fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_fibonacci_"
+    },
+    {
+      "domain": "8. 2K +15-Tok-Gap NIAH ([('PlasmaGrid-E6', 'CHK-3213'), ('CryoLock-N6', 'CHK-4811')])",
+      "prompt_tail": " across redundant optical transceivers during orbital attitude stabilization. Packet frame 118 committed without retransmission.\n\nQuestion: Based strictly on the telemetry manifest above, what are the exact verification codes for PlasmaGrid-E6 and CryoLock-N6? List each subsystem and its exact code.",
+      "output": "- CoreWatch-U8: CHK-1708\n- CryoPump-U8: CHK-4317"
+    }
+  ]
+}
