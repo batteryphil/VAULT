@@ -176,6 +176,16 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
             model.generation_config.use_cache = False
         return model
 
+    def train(self, mode: bool = True):
+        if mode:
+            runners = getattr(self, "_decode_graph_runners_v2_5", None)
+            if runners:
+                banks = self.layers[0].attn.salience_binder.BANKS
+                for sk in list(runners.keys()):
+                    runners.pop(sk).release_owner(banks)
+            self._decode_static_pack_v2_5 = None
+        return super().train(mode)
+
     def get_input_embeddings(self) -> nn.Module:
         return self.embed_tokens
 
@@ -399,7 +409,8 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
         """
         True O(1)-state streaming prefill + constant-latency autoregressive decode via `VAULTv2_5StreamingEngine`.
         """
-        self.eval()
+        if self.training:
+            self.eval()
         if input_ids.dim() == 1:
             input_ids = input_ids.unsqueeze(0)
         assert input_ids.size(0) == 1, "stream_generate currently supports batch_size=1"
@@ -529,6 +540,8 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
         use_think: bool = False,
         stream: bool = False,
         return_stats: bool = False,
+        use_cudagraph: bool = True,
+        use_bf16_amp: Optional[bool] = None,
     ) -> Union[str, Tuple[str, Dict[str, float]]]:
         """
         One-line ChatML generation helper using `VAULTv2_5StreamingEngine`.
@@ -583,6 +596,8 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
             repetition_penalty=repetition_penalty,
             eos_token_ids=(im_end, eos_id),
             occ_alpha=occ_alpha,
+            use_cudagraph=use_cudagraph,
+            use_bf16_amp=use_bf16_amp,
             on_token=_printer if stream else None,
             return_stats=return_stats,
         )

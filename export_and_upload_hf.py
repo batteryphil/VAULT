@@ -166,14 +166,14 @@ python run_vault.py
 """
 
 
-IMPORT_REWRITES = [
-    (r"from src\.kernels\.flash_vault_v2_triton import", "from .hf_flash_vault_v2_triton import"),
-    (r"from src\.vault_lm_150m import", "from .hf_vault_lm_150m import"),
-    (r"from src\.vault_v2_model import", "from .hf_vault_v2_model import"),
-    (r"from src\.vault_v2_streaming import", "from .hf_vault_v2_streaming import"),
-    (r"from src\.vault_v2_5_model import", "from .hf_vault_v2_5_model import"),
-    (r"from src\.vault_v2_5_streaming import", "from .hf_vault_v2_5_streaming import"),
-]
+HF_MODULE_MAP = {
+    "src.kernels.flash_vault_v2_triton": "hf_flash_vault_v2_triton",
+    "src.vault_lm_150m": "hf_vault_lm_150m",
+    "src.vault_v2_model": "hf_vault_v2_model",
+    "src.vault_v2_streaming": "hf_vault_v2_streaming",
+    "src.vault_v2_5_model": "hf_vault_v2_5_model",
+    "src.vault_v2_5_streaming": "hf_vault_v2_5_streaming",
+}
 
 
 MIT_LICENSE_TEXT = """MIT License
@@ -209,17 +209,56 @@ def _normalize_hf_mit_header(code: str) -> str:
 
 
 def _rewrite_for_hf_flat(src_path: str, dst_path: str) -> None:
+    import ast
+
     with open(src_path, "r", encoding="utf-8") as f:
         code = _normalize_hf_mit_header(f.read())
-    for pat, rep in IMPORT_REWRITES:
-        code = re.sub(pat, rep, code)
     # Guard legacy v1 optional import inside vault_lm_150m.py (never called by v2.5)
     code = code.replace(
         "from src.flash_vault_module import FlashVAULTAttention",
         "raise RuntimeError('Legacy v1 FlashVAULTAttention is not used in VAULT v2.5')",
     )
+    tree = ast.parse(code)
+    lines = code.splitlines(keepends=True)
+    targets = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module in HF_MODULE_MAP:
+            assert node.end_lineno is not None
+            targets.append((node.lineno, node.end_lineno, node.col_offset, node.module, HF_MODULE_MAP[node.module]))
+    # Replace bottom-up so line numbers remain valid
+    for start_ln, end_ln, col, old_mod, new_mod in sorted(targets, key=lambda t: t[0], reverse=True):
+        orig_chunk = "".join(lines[start_ln - 1 : end_ln])
+        indent = " " * col
+        stripped_lines = [
+            (ln[col:] if ln.startswith(indent) else ln) for ln in orig_chunk.splitlines(keepends=True)
+        ]
+        stripped_text = "".join(stripped_lines)
+        rel_text = re.sub(
+            rf"^from\s+{re.escape(old_mod)}\s+import",
+            f"from .{new_mod} import",
+            stripped_text,
+            count=1,
+        )
+        flat_text = re.sub(
+            rf"^from\s+{re.escape(old_mod)}\s+import",
+            f"from {new_mod} import",
+            stripped_text,
+            count=1,
+        )
+        rel_indented = "".join((f"{indent}    {ln}" if ln.strip() else ln) for ln in rel_text.splitlines(keepends=True))
+        flat_indented = "".join(
+            (f"{indent}    {ln}" if ln.strip() else ln) for ln in flat_text.splitlines(keepends=True)
+        )
+        if not rel_indented.endswith("\n"):
+            rel_indented += "\n"
+        if not flat_indented.endswith("\n"):
+            flat_indented += "\n"
+        replacement = f"{indent}try:\n{rel_indented}{indent}except ImportError:\n{flat_indented}"
+        lines[start_ln - 1 : end_ln] = [replacement]
+    final_code = "".join(lines)
+    ast.parse(final_code)
     with open(dst_path, "w", encoding="utf-8") as f:
-        f.write(code)
+        f.write(final_code)
 
 
 def _save_clean_safetensors(ckpt_pt_path: str, dst_safetensors_path: str, clone_lm_head: bool = True) -> Dict:
@@ -338,6 +377,8 @@ def build_hf_export_dir(out_dir: str) -> None:
 def verify_cleanroom_load(out_dir: str) -> None:
     print("[4/5] Running clean-room subprocess test (`cwd=/tmp`, `PYTHONPATH=''`) to verify zero local-repo dependency...")
     test_code = f"""
+import importlib.util
+import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -355,9 +396,22 @@ print("Clean-room output:\\n" + out)
 print("Clean-room stats:", stats)
 assert "return maximum, total" in out and "len(nums)" not in out, f"Unexpected output: {{out}}"
 
+# Multi-call CUDAGraph + AMP regression check (back-to-back NIAH + model.generate)
+spec = importlib.util.spec_from_file_location("hf_run_vault", os.path.join(p, "run_vault.py"))
+rv_mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(rv_mod)
+niah_prm = rv_mod.build_live_niah_demo_prompt()
+for k in range(2):
+    r_niah = model.chat(tok, niah_prm, max_new_tokens=64, temperature=0.0)
+    assert "CHK-3213" in r_niah and "CHK-4811" in r_niah, f"Multi-call NIAH {{k}} failed: {{r_niah}}"
+ids_g = tok("<|im_start|>user\\nWrite a short Python function `square(x)` that returns x * x.<|im_end|>\\n<|im_start|>assistant\\n", return_tensors="pt").to(dev)
+gen_ids = model.generate(**ids_g, max_new_tokens=32, do_sample=False)
+gen_txt = tok.decode(gen_ids[0, ids_g["input_ids"].size(1):], skip_special_tokens=True)
+assert "def square" in gen_txt, f"model.generate() failed: {{gen_txt}}"
+
 m_wide = model.expand_mitosis(508)
 assert sum(m_wide.prime_banks) == 508
-print("Clean-room 508c Mitosis verified!")
+print("Clean-room multi-call CUDAGraph + 508c Mitosis verified!")
 """
     env = dict(os.environ)
     env.pop("PYTHONPATH", None)

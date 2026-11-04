@@ -526,8 +526,9 @@ class _DecodeCUDAGraphRunnerV2_5:
         self.static_cache = VAULTv2_5StreamingEngine.init_cache(model, batch_size=batch_size, dtype=comp_dt)
         self.static_token_id = torch.zeros((batch_size, 1), device=self.dev, dtype=torch.long)
         self.owner_ref: Optional[weakref.ReferenceType] = None
+        self.static_pack = VAULTv2_5StreamingEngine._get_decode_static_pack(model, comp_dt, self.dev)
 
-        with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype):
+        with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype, cache_enabled=False):
             _ = VAULTv2_5StreamingEngine._decode_step_static(
                 model,
                 self.static_token_id,
@@ -542,7 +543,7 @@ class _DecodeCUDAGraphRunnerV2_5:
         self.cap_stream.wait_stream(torch.cuda.current_stream(device=self.dev))
         with torch.cuda.stream(self.cap_stream):
             for _ in range(2):
-                with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype):
+                with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype, cache_enabled=False):
                     _ = VAULTv2_5StreamingEngine._decode_step_static(
                         model,
                         self.static_token_id,
@@ -556,7 +557,7 @@ class _DecodeCUDAGraphRunnerV2_5:
 
         self.graph: Optional[torch.cuda.CUDAGraph] = torch.cuda.CUDAGraph()
         with torch.cuda.graph(self.graph, stream=self.cap_stream):
-            with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype):
+            with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype, cache_enabled=False):
                 self.static_h_out = VAULTv2_5StreamingEngine._decode_step_static(
                     model,
                     self.static_token_id,
@@ -1240,7 +1241,12 @@ class VAULTv2_5StreamingEngine:
     @torch.no_grad()
     def _get_decode_static_pack(model: VAULTLMv2_5, comp_dt: torch.dtype, dev: torch.device) -> Dict:
         ver_sum = sum(
-            blk.attn.ext_span_alpha._version + blk.attn.ind_shared_proj_g2._version + blk.attn.q_proj.weight._version
+            blk.attn.ext_span_alpha._version
+            + blk.attn.ind_shared_proj_g2._version
+            + blk.attn.q_proj.weight._version
+            + blk.mlp.w1.weight._version
+            + blk.mlp.w2.weight._version
+            + blk.mlp.w3.weight._version
             for blk in model.layers
         )
         pack_key = (dev, comp_dt, tuple(model.prime_banks), ver_sum)
@@ -1355,6 +1361,9 @@ class VAULTv2_5StreamingEngine:
             occ_3 = torch.cat([occ_2, occ_2[:, 1:2]], dim=1).contiguous()
             rec_3 = torch.cat([rec_2, rec_2[:, 1:2]], dim=1).contiguous()
 
+            mlp_w12 = torch.cat([blk.mlp.w1.weight, blk.mlp.w2.weight], dim=0).to(comp_dt).contiguous()
+            mlp_w3 = blk.mlp.w3.weight.to(comp_dt).contiguous()
+
             layer_packs.append(
                 {
                     "w_x_all": w_x_all,
@@ -1388,6 +1397,8 @@ class VAULTv2_5StreamingEngine:
                     "cos_k_flat": attn.rope_cos_k.reshape(128, 32).float().contiguous(),
                     "sin_k_flat": attn.rope_sin_k.reshape(128, 32).float().contiguous(),
                     "local_bias_flat": attn._local_attn_bias.reshape(12, 64, 128).float().contiguous(),
+                    "mlp_w12": mlp_w12,
+                    "mlp_w3": mlp_w3,
                 }
             )
 
@@ -2027,7 +2038,9 @@ class VAULTv2_5StreamingEngine:
 
             x = x + attn_out
             x_n2 = F.rms_norm(x.float(), (d_m,), eps=1e-6).to(x.dtype) * blk.norm2.weight
-            x = x + blk.mlp(x_n2)
+            x_mlp = x_n2.to(comp_dt) if x_n2.dtype != comp_dt else x_n2
+            mlp_h1, mlp_h2 = F.linear(x_mlp, lp["mlp_w12"]).chunk(2, dim=-1)
+            x = x + F.linear(F.silu(mlp_h1) * mlp_h2, lp["mlp_w3"])
 
         t_buf.add_(1)
         h_out = F.rms_norm(x.float(), (d_m,), eps=1e-6).to(x.dtype) * model.norm_f.weight
@@ -2114,7 +2127,8 @@ class VAULTv2_5StreamingEngine:
         use_cudagraph: bool = True,
         populate_decode_rings: bool = True,
     ) -> Tuple[torch.Tensor, VAULTv2_5StreamCache]:
-        model.eval()
+        if model.training:
+            model.eval()
         B, L = input_ids.shape
         assert L >= 1
         C = model.chunk_size

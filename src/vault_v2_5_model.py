@@ -683,7 +683,8 @@ class VAULTv2_5Attention(nn.Module):
         self.register_load_state_dict_post_hook(lambda m, _: setattr(m, "_eval_w_cache", None))
 
     def train(self, mode: bool = True):
-        self._eval_w_cache = None
+        if mode or self.training:
+            self._eval_w_cache = None
         return super().train(mode)
 
     def _get_v2_5_packed_weights(self, x: torch.Tensor):

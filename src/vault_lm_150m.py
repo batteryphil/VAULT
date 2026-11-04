@@ -83,9 +83,11 @@ class SwiGLUMLP(nn.Module):
         self.w2 = nn.Linear(d_model, d_ff, bias=False)
         self.w3 = nn.Linear(d_ff, d_model, bias=False)
         self._eval_cache = None
+        self.register_load_state_dict_post_hook(lambda m, _: setattr(m, "_eval_cache", None))
 
     def train(self, mode: bool = True):
-        self._eval_cache = None
+        if mode or self.training:
+            self._eval_cache = None
         return super().train(mode)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

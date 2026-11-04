@@ -753,10 +753,11 @@ class _DecodeCUDAGraphRunner:
         self.static_cache = VAULTv2StreamingEngine.init_cache(model, batch_size=batch_size, dtype=comp_dt)
         self.static_token_id = torch.zeros((batch_size, 1), device=self.dev, dtype=torch.long)
         self.owner_ref: Optional[weakref.ReferenceType] = None
+        self.static_pack = VAULTv2StreamingEngine._get_decode_static_pack(model, comp_dt, self.dev)
 
         # 1. Warmup once on default stream so static weight packs, SwiGLUMLP._eval_cache, Triton JIT,
         #    hipBLASLt, and rocFFT initialize on the default pool rather than the graph capture pool.
-        with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype):
+        with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype, cache_enabled=False):
             _ = VAULTv2StreamingEngine._decode_step_static(
                 model,
                 self.static_token_id,
@@ -772,7 +773,7 @@ class _DecodeCUDAGraphRunner:
         self.cap_stream.wait_stream(torch.cuda.current_stream(device=self.dev))
         with torch.cuda.stream(self.cap_stream):
             for _ in range(2):
-                with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype):
+                with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype, cache_enabled=False):
                     _ = VAULTv2StreamingEngine._decode_step_static(
                         model,
                         self.static_token_id,
@@ -786,7 +787,7 @@ class _DecodeCUDAGraphRunner:
 
         self.graph: Optional[torch.cuda.CUDAGraph] = torch.cuda.CUDAGraph()
         with torch.cuda.graph(self.graph, stream=self.cap_stream):
-            with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype):
+            with torch.amp.autocast("cuda", enabled=amp_enabled, dtype=amp_dtype, cache_enabled=False):
                 self.static_h_out = VAULTv2StreamingEngine._decode_step_static(
                     model,
                     self.static_token_id,
@@ -1442,7 +1443,14 @@ class VAULTv2StreamingEngine:
     @staticmethod
     @torch.no_grad()
     def _get_decode_static_pack(model: VAULTLMv2, comp_dt: torch.dtype, dev: torch.device) -> Dict:
-        pack_key = (dev, comp_dt, tuple(model.prime_banks))
+        ver_sum = sum(
+            blk.attn.q_proj.weight._version
+            + blk.mlp.w1.weight._version
+            + blk.mlp.w2.weight._version
+            + blk.mlp.w3.weight._version
+            for blk in model.layers
+        )
+        pack_key = (dev, comp_dt, tuple(model.prime_banks), ver_sum)
         cached = getattr(model, "_decode_static_pack", None)
         if cached is not None and cached[0] == pack_key:
             return cached[1]
@@ -1505,6 +1513,8 @@ class VAULTv2StreamingEngine:
                 torch.ones_like(wk_raw),
                 torch.where(wk_raw < -wk_th, -torch.ones_like(wk_raw), torch.zeros_like(wk_raw)),
             ).contiguous()
+            mlp_w12 = torch.cat([blk.mlp.w1.weight, blk.mlp.w2.weight], dim=0).to(comp_dt).contiguous()
+            mlp_w3 = blk.mlp.w3.weight.to(comp_dt).contiguous()
             layer_packs.append(
                 {
                     "w_x_all": w_x_all,
@@ -1530,6 +1540,8 @@ class VAULTv2StreamingEngine:
                     "g_gate_ind": attn.gtrm_gate[:, n_keep_h:].to(comp_dt).contiguous(),
                     "w_kenyon_tern": wk_tern,
                     "apl_gain_f": F.relu(attn.apl_norm.gain.detach()).float().contiguous(),
+                    "mlp_w12": mlp_w12,
+                    "mlp_w3": mlp_w3,
                 }
             )
 
@@ -2051,7 +2063,9 @@ class VAULTv2StreamingEngine:
 
             x = x + attn_out
             x_n2 = F.rms_norm(x.float(), (d_m,), eps=1e-6).to(x.dtype) * blk.norm2.weight
-            x = x + blk.mlp(x_n2)
+            x_mlp = x_n2.to(comp_dt) if x_n2.dtype != comp_dt else x_n2
+            mlp_h1, mlp_h2 = F.linear(x_mlp, lp["mlp_w12"]).chunk(2, dim=-1)
+            x = x + F.linear(F.silu(mlp_h1) * mlp_h2, lp["mlp_w3"])
 
         t_buf.add_(1)
         h_out = F.rms_norm(x.float(), (d_m,), eps=1e-6).to(x.dtype) * model.norm_f.weight
@@ -2148,7 +2162,8 @@ class VAULTv2StreamingEngine:
         Streams an arbitrary-length `input_ids (B, L)` sequence in `segment_size` chunks (`segment_size % 64 == 0`)
         with O(1) constant activation VRAM, returning `(tail_logits, cache)` ready for `decode_step`!
         """
-        model.eval()
+        if model.training:
+            model.eval()
         B, L = input_ids.shape
         assert L >= 1
         C = model.chunk_size

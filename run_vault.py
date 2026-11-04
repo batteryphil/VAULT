@@ -43,6 +43,13 @@ def load_vault_easy(
         else:
             device = "cpu"
 
+    if (
+        not local_ckpt
+        and repo_or_path == DEFAULT_HF_REPO
+        and os.path.isfile(os.path.join(ROOT_DIR, "model.safetensors"))
+    ):
+        repo_or_path = ROOT_DIR
+
     default_local = os.path.join(
         ROOT_DIR,
         "checkpoints",
@@ -74,7 +81,15 @@ def load_vault_easy(
     elif os.path.isdir(repo_or_path):
         print(f"[VAULT] Loading from directory: {repo_or_path} ...", flush=True)
         tok = AutoTokenizer.from_pretrained(repo_or_path, trust_remote_code=True)
-        model = AutoModelForCausalLM.from_pretrained(repo_or_path, trust_remote_code=True)
+        base_local_st = os.path.join(repo_or_path, "base", "vault_v2_4_step10k.safetensors")
+        if variant == "base" and os.path.isfile(base_local_st):
+            from safetensors.torch import load_file
+
+            cfg = AutoConfig.from_pretrained(repo_or_path, trust_remote_code=True)
+            model = VAULTForCausalLM(cfg)
+            load_v2_4_into_v2_5(model, load_file(base_local_st), init_ext_span_alpha=0.0)  # type: ignore[arg-type]
+        else:
+            model = AutoModelForCausalLM.from_pretrained(repo_or_path, trust_remote_code=True)
     else:
         print(f"[VAULT] Downloading / loading from HuggingFace Hub: {repo_or_path} ...", flush=True)
         tok = AutoTokenizer.from_pretrained(repo_or_path, trust_remote_code=True)
