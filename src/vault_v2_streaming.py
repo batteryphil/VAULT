@@ -342,14 +342,14 @@ def stateful_flash_vault_v2_chunkwise(
     Stateful chunkwise Co-Prime fast-weight scan on GPU (Triton WMMA) or CPU (Compact-WY PyTorch).
     Supports `max(prime_banks) <= 512` (`BANK_PAD in {32, 64, 128, 256, 512}`)!
     """
-    if not (_HAS_TRITON and phi_q.is_cuda):
+    if not (_HAS_TRITON and phi_q.is_cuda and v.dtype in (torch.float32, torch.bfloat16)):
         return _stateful_vault_v2_cpu_chunkwise(
             phi_q, phi_k, v, beta, cell_q, cell_k, S_state, occ_state,
             chunk_size=chunk_size, v2_2_beta_occ=v2_2_beta_occ, occ_alpha=occ_alpha,
         )
 
     orig_dtype = v.dtype
-    use_bf16_wmma = orig_dtype in (torch.bfloat16, torch.float16)
+    use_bf16_wmma = orig_dtype == torch.bfloat16
 
     p0, p1, p2, p3 = int(prime_banks[0]), int(prime_banks[1]), int(prime_banks[2]), int(prime_banks[3])
     c1 = p0

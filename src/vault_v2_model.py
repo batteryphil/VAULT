@@ -31,6 +31,16 @@ from src.vault_lm_150m import RMSNorm, FusedAPLNorm, TernarySTEProjection, SwiGL
 from src.kernels.flash_vault_v2_triton import flash_vault_v2_chunkwise, causal_depthwise_conv1d
 
 
+def _safe_orthogonal_(weight: torch.Tensor) -> None:
+    if weight.device.type == "cpu" and weight.dtype in (torch.bfloat16, torch.float16):
+        tmp = torch.empty(weight.shape, dtype=torch.float32, device="cpu")
+        nn.init.orthogonal_(tmp)
+        with torch.no_grad():
+            weight.copy_(tmp.to(weight.dtype))
+    else:
+        nn.init.orthogonal_(weight)
+
+
 class CausalShortConv1D(nn.Module):
     """
     Depthwise causal 1D convolution (`kernel_size=4`) + SiLU activation.
@@ -339,7 +349,7 @@ class SalienceEntityBinder(nn.Module):
 
         # Orthogonal 256D projection: [:128] = continuous entity key `ent_u`, [128:256] = Voronoi router `ent_r`
         self.ent_key_proj = nn.Linear(d_model, 2 * self.ind_dim, bias=False)
-        nn.init.orthogonal_(self.ent_key_proj.weight)
+        _safe_orthogonal_(self.ent_key_proj.weight)
 
         self.ent_tok_gate = nn.Linear(d_model, 1, bias=True)
         nn.init.normal_(self.ent_tok_gate.weight, mean=0.0, std=0.02)
@@ -566,8 +576,8 @@ class VAULTv2Attention(nn.Module):
             # Voronoi-Decoupled 2x-wide Orthogonal Lexical Projections (`[:half]` -> continuous key `u_ind`, `[half:]` -> cell router `r_all`)
             self.lex_router_g2 = nn.Linear(2 * d_model, 2 * self.n_ent_groups * head_dim, bias=False)
             self.lex_router_g3 = nn.Linear(3 * d_model, 2 * head_dim, bias=False)
-            nn.init.orthogonal_(self.lex_router_g2.weight)
-            nn.init.orthogonal_(self.lex_router_g3.weight)
+            _safe_orthogonal_(self.lex_router_g2.weight)
+            _safe_orthogonal_(self.lex_router_g3.weight)
 
             self.salience_binder = SalienceEntityBinder(
                 d_model,
@@ -591,8 +601,8 @@ class VAULTv2Attention(nn.Module):
             # Isotropic `x0_iso` SVD token-copy value & unclamped residual readout pair (`init_v2_2_from_pretrained_backbone`)
             self.v_ind_proj = nn.Linear(d_model, self.n_ind_groups * head_dim, bias=False)
             self.ind_out_proj = nn.Linear(self.n_ind_groups * head_dim, d_model, bias=False)
-            nn.init.orthogonal_(self.v_ind_proj.weight)
-            nn.init.orthogonal_(self.ind_out_proj.weight)
+            _safe_orthogonal_(self.v_ind_proj.weight)
+            _safe_orthogonal_(self.ind_out_proj.weight)
 
             self.ind_read_proj = nn.Linear(3 * d_model, self.n_ind_groups * self.heads_per_group, bias=True)
             nn.init.normal_(self.ind_read_proj.weight, mean=0.0, std=0.01)

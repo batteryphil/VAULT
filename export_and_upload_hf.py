@@ -170,9 +170,41 @@ IMPORT_REWRITES = [
 ]
 
 
+MIT_LICENSE_TEXT = """MIT License
+
+Copyright (c) 2026 Philip Bartsch (batteryphil)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+
+def _normalize_hf_mit_header(code: str) -> str:
+    return code.replace(
+        "# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-VAULT-Commercial\n"
+        "# Dual License: GNU AGPL-3.0-or-later (Free / Non-Profit / Open-Source) OR Commercial License\n",
+        "# MIT License\n",
+    )
+
+
 def _rewrite_for_hf_flat(src_path: str, dst_path: str) -> None:
     with open(src_path, "r", encoding="utf-8") as f:
-        code = f.read()
+        code = _normalize_hf_mit_header(f.read())
     for pat, rep in IMPORT_REWRITES:
         code = re.sub(pat, rep, code)
     # Guard legacy v1 optional import inside vault_lm_150m.py (never called by v2.5)
@@ -246,6 +278,7 @@ def build_hf_export_dir(out_dir: str) -> None:
                 "eos_token_id": [0, 2],
                 "pad_token_id": 0,
                 "max_new_tokens": 256,
+                "use_cache": False,
             },
             f,
             indent=2,
@@ -266,9 +299,9 @@ def build_hf_export_dir(out_dir: str) -> None:
     for s_p, d_p in module_map.items():
         _rewrite_for_hf_flat(s_p, d_p)
 
-    # Include `run_vault.py` (with flat fallback import) + full benchmark score sheets + LICENSE
+    # Include `run_vault.py` (with flat fallback import) + full benchmark score sheets + MIT LICENSE for HF Hub
     with open(os.path.join(ROOT_DIR, "run_vault.py"), "r", encoding="utf-8") as f:
-        rv_code = f.read().replace(
+        rv_code = _normalize_hf_mit_header(f.read()).replace(
             "from src.vault_v2_5_model import _unwrap_checkpoint_state_dict, load_v2_4_into_v2_5",
             "try:\n    from src.vault_v2_5_model import _unwrap_checkpoint_state_dict, load_v2_4_into_v2_5\n"
             "except ImportError:\n    from hf_vault_v2_5_model import _unwrap_checkpoint_state_dict, load_v2_4_into_v2_5",
@@ -276,7 +309,8 @@ def build_hf_export_dir(out_dir: str) -> None:
     with open(os.path.join(out_dir, "run_vault.py"), "w", encoding="utf-8") as f:
         f.write(rv_code)
 
-    shutil.copy2(os.path.join(ROOT_DIR, "LICENSE"), os.path.join(out_dir, "LICENSE"))
+    with open(os.path.join(out_dir, "LICENSE"), "w", encoding="utf-8") as f:
+        f.write(MIT_LICENSE_TEXT)
     os.makedirs(os.path.join(out_dir, "benchmarks"), exist_ok=True)
     for b_file in (
         "vault_scores_audit.txt",

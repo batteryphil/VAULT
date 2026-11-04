@@ -181,9 +181,18 @@ def main() -> None:
     parser.add_argument("--device", type=str, default="", help="Device (default: cuda:0 if available else cpu)")
     parser.add_argument("--prompt", type=str, default="", help="Run a single prompt and exit")
     parser.add_argument("--raw", action="store_true", help="Use raw text completion instead of ChatML template")
-    parser.add_argument("--max_new_tokens", type=int, default=256)
+    parser.add_argument(
+        "--max-new-tokens",
+        "--max_new_tokens",
+        "--max-tokens",
+        dest="max_new_tokens",
+        type=int,
+        default=256,
+        help="Maximum new tokens to generate",
+    )
     parser.add_argument("--temperature", type=float, default=0.0)
-    parser.add_argument("--top_p", type=float, default=0.9)
+    parser.add_argument("--top-p", "--top_p", dest="top_p", type=float, default=0.9)
+    parser.add_argument("--think", action="store_true", help="Seed explicit <think>...</think> Chain-of-Thought")
     parser.add_argument("--demo", action="store_true", help="Run the 4-domain live streaming showcase")
     args = parser.parse_args()
 
@@ -234,6 +243,7 @@ def main() -> None:
                 max_new_tokens=args.max_new_tokens,
                 temperature=args.temperature,
                 top_p=args.top_p,
+                use_think=args.think,
                 stream=True,
                 return_stats=True,
             )

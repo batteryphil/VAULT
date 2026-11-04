@@ -4,17 +4,20 @@
 #
 # HuggingFace `AutoModelForCausalLM` wrapper for VAULT v2.5:
 #   - 1-to-1 lossless `safetensors` compatibility with `VAULTLMv2_5`
+#   - Full `GenerationMixin` (`model.generate(...)` & `transformers.pipeline("text-generation")`)
+#   - Native `float32`, `bfloat16`, `float16`, `device_map="auto"`, and CPU fallback support
 #   - True O(1)-state streaming prefill & Zero-rocFFT Triton / CUDAGraph decode (`stream_generate`, `chat`)
 #   - 1-line Zero-Shot Elastic Co-Prime Mitosis (`expand_mitosis(2002)`)
 
+from contextlib import nullcontext
 import math
 import time
-from typing import Callable, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import PreTrainedModel
+from transformers import GenerationMixin, PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 try:
@@ -30,32 +33,57 @@ from src.vault_v2_5_model import (
 from src.vault_v2_5_streaming import VAULTv2_5StreamingEngine
 
 
-class VAULTForCausalLM(PreTrainedModel):
+_FP32_BUFFER_SUFFIXES = (
+    "harmonic_anchors",
+    "local_decay_mask",
+    "_local_attn_bias",
+    "rope_cos_k",
+    "rope_sin_k",
+    "rope_cos_q",
+    "rope_sin_q",
+    "x0_cone_mean",
+    "cms_proj",
+    "sal_lag_dist",
+    "_id_weights_3g",
+)
+
+
+class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
     config_class = VAULTConfig
     base_model_prefix = ""
     supports_gradient_checkpointing = True
     _no_split_modules = ["VAULTv2_5Block"]
+    _supports_cache_class = False
 
     def __init__(self, config: VAULTConfig):
         super().__init__(config)
-        # Materialize on CPU even if `transformers >= 5.0` enters `__init__` under `with torch.device("meta"):`
-        with torch.device("cpu"):
-            core = VAULTLMv2_5(
-                vocab_size=config.vocab_size,
-                d_model=config.d_model,
-                n_layers=config.n_layers,
-                n_q_heads=config.n_q_heads,
-                n_vault_groups=config.n_vault_groups,
-                head_dim=config.head_dim,
-                d_ff=config.d_ff,
-                chunk_size=config.chunk_size,
-                grad_checkpoint="none",
-                prime_banks=tuple(config.prime_banks),
-                ema_alpha=float(config.ema_alpha),
-            )
-            # Keep separate parameter storage when tie_word_embeddings=False so safetensors loads/saves cleanly
-            if not config.tie_word_embeddings:
-                core.lm_head.weight = nn.Parameter(core.embed_tokens.weight.detach().clone())
+        # Materialize on CPU in FP32 first even if `transformers >= 5.0` enters `__init__` under
+        # `with torch.device("meta"):` or `dtype=torch.bfloat16 / float16`, then cast parameters cleanly.
+        orig_dtype = torch.get_default_dtype()
+        torch.set_default_dtype(torch.float32)
+        try:
+            with torch.device("cpu"):
+                core = VAULTLMv2_5(
+                    vocab_size=config.vocab_size,
+                    d_model=config.d_model,
+                    n_layers=config.n_layers,
+                    n_q_heads=config.n_q_heads,
+                    n_vault_groups=config.n_vault_groups,
+                    head_dim=config.head_dim,
+                    d_ff=config.d_ff,
+                    chunk_size=config.chunk_size,
+                    grad_checkpoint="none",
+                    prime_banks=tuple(config.prime_banks),
+                    ema_alpha=float(config.ema_alpha),
+                )
+                if not config.tie_word_embeddings:
+                    core.lm_head.weight = nn.Parameter(core.embed_tokens.weight.detach().clone())
+                if orig_dtype != torch.float32:
+                    for p in core.parameters():
+                        if p.is_floating_point():
+                            p.data = p.data.to(orig_dtype)
+        finally:
+            torch.set_default_dtype(orig_dtype)
 
         for name, mod in core._modules.items():
             self._modules[name] = mod
@@ -68,21 +96,46 @@ class VAULTForCausalLM(PreTrainedModel):
                 setattr(self, k, v)
 
         self.post_init()
+        if getattr(self, "generation_config", None) is not None:
+            self.generation_config.use_cache = False
+
+    def _keep_precision_buffers_fp32_(self) -> None:
+        if not hasattr(self, "layers"):
+            return
+        for mod in self.modules():
+            for b_name, buf in list(mod._buffers.items()):
+                if buf is not None and buf.device.type != "meta" and buf.is_floating_point():
+                    if b_name in _FP32_BUFFER_SUFFIXES and buf.dtype != torch.float32:
+                        mod._buffers[b_name] = buf.to(torch.float32)
+        for blk in self.layers:
+            blk.attn._eval_w_cache = None
+        if hasattr(self, "_decode_static_pack_v2_5"):
+            delattr(self, "_decode_static_pack_v2_5")
+        if hasattr(self, "_cudagraph_decode_v2_5"):
+            delattr(self, "_cudagraph_decode_v2_5")
+
+    def _apply(self, fn, recurse: bool = True):
+        out = super()._apply(fn, recurse=recurse)
+        self._keep_precision_buffers_fp32_()
+        self._restore_non_persistent_buffers_()
+        return out
 
     @torch.no_grad()
     def _restore_non_persistent_buffers_(self) -> None:
         """
         Re-populates deterministic `persistent=False` buffers (`_local_attn_bias`, `_sal_lag_mask_3g`,
-        `_id_weights_3g`) after `transformers >= 5.0` runs `model.to_empty()` during `from_pretrained`.
+        `_id_weights_3g`) in exact FP32 after `transformers >= 5.0` runs `model.to_empty()` or `.to(dtype)`.
         """
         if not hasattr(self, "layers"):
             return
         for blk in self.layers:
             attn = blk.attn
             dev = attn.local_decay_mask.device
-            if not dev.type == "meta":
+            if dev.type != "meta":
                 C = int(attn.chunk_size)
-                log_one_minus = torch.linspace(math.log(0.34), math.log(0.008), int(attn.n_q_heads), device=dev)
+                log_one_minus = torch.linspace(
+                    math.log(0.34), math.log(0.008), int(attn.n_q_heads), device=dev, dtype=torch.float32
+                )
                 head_decays = 1.0 - torch.exp(log_one_minus)
                 idx_q = torch.arange(C, device=dev, dtype=torch.float32) + C
                 idx_k = torch.arange(2 * C, device=dev, dtype=torch.float32)
@@ -92,7 +145,7 @@ class VAULTForCausalLM(PreTrainedModel):
                 attn_bias = torch.where(
                     decay_3d > 0.0, torch.log(decay_3d.clamp(min=1e-8)), torch.full_like(decay_3d, -1e9)
                 )
-                attn._local_attn_bias.copy_(attn_bias.view(1, int(attn.n_q_heads), 1, C, 2 * C))
+                attn._buffers["_local_attn_bias"] = attn_bias.view(1, int(attn.n_q_heads), 1, C, 2 * C)
 
                 sb = attn.salience_binder
                 W = int(sb.window_size)
@@ -102,20 +155,24 @@ class VAULTForCausalLM(PreTrainedModel):
                 lag_3g = torch.stack(
                     [(df >= 4) & (df <= W), (df >= 7) & (df <= W), (df >= 11) & (df <= W)], dim=0
                 ).unsqueeze(0).unsqueeze(2)
-                sb._sal_lag_mask_3g.copy_(lag_3g)
-                sb._id_weights_3g.copy_(
-                    torch.tensor([1.50, 1.20, 1.15], device=dev, dtype=torch.float32).view(1, 1, 3, 1, 1)
-                )
+                sb._buffers["_sal_lag_mask_3g"] = lag_3g
+                sb._buffers["_id_weights_3g"] = torch.tensor(
+                    [1.50, 1.20, 1.15], device=dev, dtype=torch.float32
+                ).view(1, 1, 3, 1, 1)
             attn._eval_w_cache = None
 
     def _init_weights(self, module: nn.Module) -> None:
         if module is self:
+            self._keep_precision_buffers_fp32_()
             self._restore_non_persistent_buffers_()
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
         model = super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
+        model._keep_precision_buffers_fp32_()
         model._restore_non_persistent_buffers_()
+        if getattr(model, "generation_config", None) is not None:
+            model.generation_config.use_cache = False
         return model
 
     def get_input_embeddings(self) -> nn.Module:
@@ -129,6 +186,17 @@ class VAULTForCausalLM(PreTrainedModel):
 
     def set_output_embeddings(self, new_embeddings: nn.Module) -> None:
         self.lm_head = new_embeddings
+
+    def prepare_inputs_for_generation(
+        self,
+        input_ids: torch.LongTensor,
+        attention_mask: Optional[torch.LongTensor] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
 
     def compute_x0_norm(self, x: torch.Tensor) -> torch.Tensor:
         return self.x0_rms_norm(x.detach())
@@ -173,6 +241,82 @@ class VAULTForCausalLM(PreTrainedModel):
         if not return_dict:
             return (loss, logits) if loss is not None else (logits,)
         return CausalLMOutputWithPast(loss=loss, logits=logits)
+
+    @torch.no_grad()
+    def generate(
+        self,
+        inputs: Optional[torch.Tensor] = None,
+        generation_config=None,
+        **kwargs,
+    ):
+        """
+        HuggingFace `model.generate(...)` entry point:
+          - Automatically accelerates standard `batch_size == 1` greedy / temperature / top-p calls via
+            VAULT's hardware-fused O(1) `stream_generate` engine (~49 tok/s on GPU).
+          - Seamlessly delegates `transformers.pipeline("text-generation")`, `batch_size > 1`, beam search,
+            streamers, and custom `GenerationMixin` processors to `super().generate(..., use_cache=False)`.
+        """
+        inp = inputs if inputs is not None else kwargs.get("input_ids", None)
+        exotic_keys = {
+            "logits_processor",
+            "stopping_criteria",
+            "prefix_allowed_tokens_fn",
+            "synced_gpus",
+            "assistant_model",
+            "streamer",
+            "negative_prompt_ids",
+            "negative_prompt_attention_mask",
+            "custom_generate",
+        }
+        has_exotic = any(kwargs.get(k) is not None for k in exotic_keys)
+        num_beams = int(kwargs.get("num_beams", getattr(generation_config, "num_beams", 1) or 1))
+        num_ret = int(
+            kwargs.get("num_return_sequences", getattr(generation_config, "num_return_sequences", 1) or 1)
+        )
+        ret_dict = bool(
+            kwargs.get("return_dict_in_generate", getattr(generation_config, "return_dict_in_generate", False))
+        )
+        out_scores = bool(
+            kwargs.get("output_scores", getattr(generation_config, "output_scores", False))
+            or kwargs.get("output_logits", getattr(generation_config, "output_logits", False))
+            or kwargs.get("output_hidden_states", getattr(generation_config, "output_hidden_states", False))
+        )
+        top_k = kwargs.get("top_k", None)
+
+        if (
+            isinstance(inp, torch.Tensor)
+            and inp.dim() in (1, 2)
+            and (inp.dim() == 1 or inp.size(0) == 1)
+            and generation_config is None
+            and not has_exotic
+            and num_beams == 1
+            and num_ret == 1
+            and not ret_dict
+            and not out_scores
+            and top_k is None
+        ):
+            max_new = kwargs.get("max_new_tokens", None)
+            if max_new is None:
+                max_len = kwargs.get("max_length", None)
+                seq_len = inp.size(-1)
+                max_new = max(1, int(max_len) - seq_len) if max_len is not None else 256
+            do_sample = bool(kwargs.get("do_sample", False))
+            temp = float(kwargs.get("temperature", 1.0)) if do_sample else 0.0
+            top_p = float(kwargs.get("top_p", 1.0)) if do_sample else 1.0
+            rep_pen = float(kwargs.get("repetition_penalty", 1.0))
+            eos_arg = kwargs.get("eos_token_id", [0, 2])
+            eos_ids = [eos_arg] if isinstance(eos_arg, int) else list(eos_arg if eos_arg is not None else [0, 2])
+            return self.stream_generate(
+                inp,
+                max_new_tokens=int(max_new),
+                temperature=temp,
+                top_p=top_p,
+                repetition_penalty=rep_pen,
+                eos_token_ids=eos_ids,
+            )
+
+        kwargs["use_cache"] = False
+        return super().generate(inputs=inputs, generation_config=generation_config, **kwargs)
 
     @torch.no_grad()
     def expand_mitosis(
@@ -261,9 +405,9 @@ class VAULTForCausalLM(PreTrainedModel):
         occ = float(occ_alpha if occ_alpha is not None else getattr(self.config, "occ_alpha", 0.5))
         is_cuda = dev.type == "cuda" and torch.cuda.is_available()
         stop_set = set(int(x) for x in eos_token_ids if x is not None and int(x) >= 0)
-        cg_ok = bool(use_cudagraph and is_cuda and self.embed_tokens.weight.dtype == torch.float32)
-
-        from contextlib import nullcontext
+        cg_ok = bool(
+            use_cudagraph and is_cuda and self.embed_tokens.weight.dtype in (torch.float32, torch.bfloat16)
+        )
 
         amp_guard = torch.amp.autocast("cuda", enabled=False) if is_cuda else nullcontext()
         with amp_guard:
@@ -352,34 +496,53 @@ class VAULTForCausalLM(PreTrainedModel):
     def chat(
         self,
         tokenizer,
-        prompt: str,
+        prompt: Union[str, Sequence[Dict[str, str]]],
         system: Optional[str] = None,
         max_new_tokens: int = 256,
         temperature: float = 0.0,
         top_p: float = 0.9,
         repetition_penalty: float = 1.0,
         occ_alpha: Optional[float] = None,
+        use_think: bool = False,
         stream: bool = False,
         return_stats: bool = False,
     ) -> Union[str, Tuple[str, Dict[str, float]]]:
         """
         One-line ChatML generation helper using `VAULTv2_5StreamingEngine`.
+        Accepts either a plain prompt `str` or an OpenAI/HF `messages` list (`[{"role": ..., "content": ...}]`),
+        and supports `use_think=True` to trigger explicit `<think>...</think>` Chain-of-Thought reasoning.
         """
         im_start = tokenizer.convert_tokens_to_ids("<|im_start|>")
         im_end = tokenizer.convert_tokens_to_ids("<|im_end|>")
         eos_id = tokenizer.eos_token_id if tokenizer.eos_token_id is not None else 0
+        nl_ids = tokenizer.encode("\n", add_special_tokens=False)
 
         ids = []
-        if system:
-            ids.extend([im_start] + tokenizer.encode(f"system\n{system.strip()}", add_special_tokens=False) + [im_end])
-            ids.extend(tokenizer.encode("\n", add_special_tokens=False))
-        ids.extend([im_start] + tokenizer.encode(f"user\n{prompt.strip()}", add_special_tokens=False) + [im_end])
-        ids.extend(tokenizer.encode("\n", add_special_tokens=False))
-        ids.extend([im_start] + tokenizer.encode("assistant\n", add_special_tokens=False))
+        if isinstance(prompt, str):
+            if system:
+                ids.extend([im_start] + tokenizer.encode(f"system\n{system.strip()}", add_special_tokens=False) + [im_end])
+                ids.extend(nl_ids)
+            ids.extend([im_start] + tokenizer.encode(f"user\n{prompt.strip()}", add_special_tokens=False) + [im_end])
+            ids.extend(nl_ids)
+        else:
+            if system and (not prompt or prompt[0].get("role") != "system"):
+                ids.extend([im_start] + tokenizer.encode(f"system\n{system.strip()}", add_special_tokens=False) + [im_end])
+                ids.extend(nl_ids)
+            for msg in prompt:
+                role = str(msg.get("role", "user")).strip()
+                content = str(msg.get("content", "")).strip()
+                ids.extend([im_start] + tokenizer.encode(f"{role}\n{content}", add_special_tokens=False) + [im_end])
+                ids.extend(nl_ids)
+
+        assistant_prefix = "assistant\n<think>\n" if use_think else "assistant\n"
+        ids.extend([im_start] + tokenizer.encode(assistant_prefix, add_special_tokens=False))
 
         inp = torch.tensor([ids], dtype=torch.long, device=self.embed_tokens.weight.device)
         stream_buf = []
         printed_len = 0
+        seed_prefix = "<think>\n" if use_think else ""
+        if stream and seed_prefix:
+            print(seed_prefix, end="", flush=True)
 
         def _printer(tid: int) -> None:
             nonlocal printed_len
@@ -406,7 +569,8 @@ class VAULTForCausalLM(PreTrainedModel):
         if return_stats:
             out_ids, stats = res  # type: ignore[misc]
             gen_ids = out_ids[0, inp.size(1) :].tolist()
-            return tokenizer.decode(gen_ids, skip_special_tokens=True).strip(), stats
+            text = (seed_prefix + tokenizer.decode(gen_ids, skip_special_tokens=True)).strip()
+            return text, stats
 
         gen_ids = res[0, inp.size(1) :].tolist()  # type: ignore[index]
-        return tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
+        return (seed_prefix + tokenizer.decode(gen_ids, skip_special_tokens=True)).strip()

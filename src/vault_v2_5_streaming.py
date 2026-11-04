@@ -1439,8 +1439,8 @@ class VAULTv2_5StreamingEngine:
         B = token_id.size(0)
         C = model.chunk_size
         dev = token_id.device
-        use_triton_gpu = _HAS_TRITON and (dev.type == "cuda")
         comp_dt = cache.comp_dt
+        use_triton_gpu = _HAS_TRITON and (dev.type == "cuda") and (comp_dt in (torch.float32, torch.bfloat16))
         d_m = model.d_model
         pack = cls._get_decode_static_pack(model, comp_dt, dev)
 

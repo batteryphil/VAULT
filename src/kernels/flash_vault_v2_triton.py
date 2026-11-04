@@ -1073,6 +1073,34 @@ def flash_vault_v2_chunkwise(
             v2_1_consensus=v2_1_consensus,
             v2_2_beta_occ=v2_2_beta_occ,
         )
+    if v.dtype == torch.float16:
+        if torch.cuda.is_bf16_supported():
+            out_bf16 = FlashVAULTv2Function.apply(
+                phi_q.to(torch.bfloat16),
+                phi_k.to(torch.bfloat16),
+                v.to(torch.bfloat16),
+                beta,
+                cell_q,
+                cell_k,
+                chunk_size,
+                v2_1_consensus,
+                ckpt_interval,
+                v2_2_beta_occ,
+                prime_banks,
+                shared_group_cell_q,
+            )
+            return out_bf16.to(torch.float16)
+        return flash_vault_v2_recurrent_reference(
+            phi_q,
+            phi_k,
+            v,
+            beta,
+            cell_q,
+            cell_k,
+            num_cells=sum(prime_banks),
+            v2_1_consensus=v2_1_consensus,
+            v2_2_beta_occ=v2_2_beta_occ,
+        )
     return FlashVAULTv2Function.apply(
         phi_q,
         phi_k,
