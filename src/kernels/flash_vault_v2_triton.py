@@ -1081,10 +1081,8 @@ def flash_vault_v2_chunkwise(
     needs_grad = torch.is_grad_enabled() and any(t.requires_grad for t in (phi_q, phi_k, v, beta))
     if max(prime_banks) > 64:
         if _HAS_TRITON and phi_q.is_cuda and not needs_grad:
-            try:
-                from src.vault_v2_streaming import stateful_flash_vault_v2_chunkwise
-            except ImportError:
-                from ..vault_v2_streaming import stateful_flash_vault_v2_chunkwise  # type: ignore[no-redef]
+            from src.vault_v2_streaming import stateful_flash_vault_v2_chunkwise
+
             B, _, _, D = phi_q.shape
             G = phi_k.size(1)
             total_cells = sum(int(p) for p in prime_banks)
@@ -1105,10 +1103,8 @@ def flash_vault_v2_chunkwise(
                 prime_banks=prime_banks,
                 shared_group_cell_q=shared_group_cell_q,
             )
-        try:
-            from src.vault_v2_5_model import _vault_v2_5_cpu_chunkwise_autograd
-        except ImportError:
-            from ..vault_v2_5_model import _vault_v2_5_cpu_chunkwise_autograd  # type: ignore[no-redef]
+        from src.vault_v2_5_model import _vault_v2_5_cpu_chunkwise_autograd
+
         return _vault_v2_5_cpu_chunkwise_autograd(
             phi_q,
             phi_k,
