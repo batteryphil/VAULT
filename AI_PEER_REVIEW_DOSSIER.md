@@ -1,7 +1,7 @@
 # VAULT & VAULT v2 (`FlashVAULT v2`): Technical Dossier for Independent AI Peer Review
 
 **Author & Architect:** Philip Bartsch (`@batteryphil`)
-**Repository:** https://github.com/batteryphil/VAULT (MIT License)
+**Repository:** https://github.com/batteryphil/VAULT (Dual License: AGPL-3.0-or-later OR Commercial)
 **Snapshot Status:** Live Stage-1 WSD Pretraining at Step 5,900 / 7,500 (193.33M / 245.76M `L=2048` tokens; Holdout `Val PPL = 11.06`, `gnorm = 0.62`, `2,699 tok/s` on a single 16 GB AMD Radeon RX 9060 XT GPU)
 
 ---

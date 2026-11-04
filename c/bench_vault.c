@@ -2,7 +2,7 @@
  * bench_vault.c — 100,000-Token C99 Head-to-Head Paradigm Benchmark for VAULT
  * ===========================================================================
  * VAULT: Variance-Weighted Associative Unitary Lattice Tensor
- * Copyright (c) 2026 Philip Bartsch (batteryphil) — MIT License.
+ * Copyright (c) 2026 Philip Bartsch (batteryphil) — Dual License (AGPL-3.0-or-later OR Commercial).
  */
 
 #define _POSIX_C_SOURCE 199309L

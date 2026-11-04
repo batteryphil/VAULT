@@ -2,7 +2,7 @@
  * vault.c — Native Zero-Dependency C99 Implementation of the VAULT Paradigm
  * =========================================================================
  * VAULT: Variance-Weighted Associative Unitary Lattice Tensor
- * Copyright (c) 2026 Philip Bartsch (batteryphil) — MIT License.
+ * Copyright (c) 2026 Philip Bartsch (batteryphil) — Dual License (AGPL-3.0-or-later OR Commercial).
  */
 
 #include "vault.h"

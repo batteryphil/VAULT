@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# MIT License
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-VAULT-Commercial
+# Dual License: GNU AGPL-3.0-or-later (Free / Non-Profit / Open-Source) OR Commercial License
 # Copyright (c) 2026 Philip Bartsch (batteryphil)
 #
 # VAULT v2.2 (`VAULTLMv2(v2_2_mode=True)` + `FlashVAULT v2.2` Beta-Weighted Consensus & Two-Level Induction):

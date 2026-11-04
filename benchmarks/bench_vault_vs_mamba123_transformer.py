@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# MIT License
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-VAULT-Commercial
+# Dual License: GNU AGPL-3.0-or-later (Free / Non-Profit / Open-Source) OR Commercial License
 # Copyright (c) 2026 Philip Bartsch (batteryphil)
 #
 # Rigorous 5-Architecture Head-to-Head Benchmark on AMD Radeon RX 9060 XT (16 GB, ROCm 7.2, BF16):

@@ -3,7 +3,7 @@
 
 **Author & Architect:** Philip Bartsch ([`@batteryphil`](https://github.com/batteryphil))  
 **Pretrained & SFT Weights (HuggingFace Hub):** [**`batteryphil/VAULT-v2.5-180M`**](https://huggingface.co/batteryphil/VAULT-v2.5-180M)  
-**License:** MIT License (`Copyright (c) 2026 Philip Bartsch`)
+**License:** Dual License — [**GNU AGPL-3.0**](LICENSE-AGPL-3.0) (Free / Non-Profit / Open-Source) **or** [**Commercial License**](LICENSE-COMMERCIAL.md) (Closed-Source Business Use) · `Copyright (c) 2026 Philip Bartsch`
 
 ---
 
@@ -241,7 +241,9 @@ VAULT/
 ├── train_vault_v2_5_sft.py               # Stage 3 VAULT v2.5 precision SFT trainer (EMA + Val Gate)
 ├── Makefile                              # Build, demo, REPL, verification, data prep, training & eval targets
 ├── requirements.txt                      # Cross-platform Python dependencies
-└── LICENSE                               # MIT License — Copyright (c) 2026 Philip Bartsch (batteryphil)
+├── LICENSE                               # Dual License summary + full GNU AGPL-3.0 text
+├── LICENSE-AGPL-3.0                      # Verbatim GNU Affero General Public License v3.0
+└── LICENSE-COMMERCIAL.md                 # Commercial License terms & contact details
 ```
 
 ---
@@ -272,3 +274,19 @@ make train-v2
 # 6. Run foundational C99 & PyTorch associative memory falsification tests
 make test
 ```
+
+---
+
+## ⚖️ Dual License (`AGPL-3.0-or-later` OR Commercial License)
+
+Copyright (c) 2026 **Philip Bartsch** ([`@batteryphil`](https://github.com/batteryphil)). All rights reserved.
+
+This repository is **dual-licensed** under:
+
+1. **[GNU Affero General Public License v3.0 (`AGPL-3.0-or-later`)](LICENSE-AGPL-3.0)** — **Free & Open Source:**
+   - Free for **non-profit organizations, universities, academic researchers, students, educators, and personal projects**.
+   - Free for **open-source projects and businesses** that release the complete source code of any software, derivative work, or network/API/SaaS service using VAULT under **GNU AGPL-3.0** (including Section 13 network-interaction obligations).
+2. **[VAULT Commercial License](LICENSE-COMMERCIAL.md)** — **Closed-Source Business Use:**
+   - Required for **for-profit businesses and commercial entities** wishing to embed, integrate, distribute, or host VAULT in proprietary/closed-source software, hardware, internal enterprise deployments, APIs, or SaaS offerings **without** open-sourcing their own software under AGPL-3.0.
+   - For commercial licensing inquiries, see [`LICENSE-COMMERCIAL.md`](LICENSE-COMMERCIAL.md) or contact `@batteryphil` at [`https://github.com/batteryphil`](https://github.com/batteryphil).
+

@@ -2,7 +2,7 @@
 vault.py — The VAULT Foundational Sequence Architecture
 =======================================================
 VAULT: Variance-Weighted Associative Unitary Lattice Tensor
-100% Original Architecture by Philip Bartsch (@batteryphil) — MIT License.
+100% Original Architecture by Philip Bartsch (@batteryphil) — Dual License (AGPL-3.0-or-later OR Commercial).
 
 Unifies 7 foundational mechanisms from Philip Bartsch's owned repositories:
   1. Bit-Sliced 1.58-Bit Ternary Projections (`buildbit-os`, `synapse-os`)

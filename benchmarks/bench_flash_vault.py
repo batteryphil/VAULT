@@ -1,4 +1,5 @@
-# MIT License
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-VAULT-Commercial
+# Dual License: GNU AGPL-3.0-or-later (Free / Non-Profit / Open-Source) OR Commercial License
 # Copyright (c) 2026 Philip Bartsch (batteryphil)
 #
 # Phase 3 Long-Context Speed, VRAM & 32K Multi-Needle NIAH Benchmark for FlashVAULT
