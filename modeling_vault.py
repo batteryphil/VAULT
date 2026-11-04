@@ -427,7 +427,9 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
         w_dt = self.embed_tokens.weight.dtype
         bf16_hw = is_cuda and _gpu_supports_bf16_triton(dev)
         enable_bf16_amp = bool(
-            use_bf16_amp if use_bf16_amp is not None else (bf16_hw and w_dt == torch.float32)
+            use_bf16_amp
+            if use_bf16_amp is not None
+            else (bf16_hw and w_dt == torch.float32 and inp.size(1) >= 64)
         )
         stop_set = set(int(x) for x in eos_token_ids if x is not None and int(x) >= 0)
         cg_ok = bool(
