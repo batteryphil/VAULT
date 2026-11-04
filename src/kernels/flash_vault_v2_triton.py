@@ -41,6 +41,19 @@ except ImportError:
     tl = _TLStub()  # type: ignore[assignment]
 
 
+def _is_rocm_backend() -> bool:
+    return getattr(torch.version, "hip", None) is not None
+
+
+def _gpu_supports_bf16_triton(device: torch.device) -> bool:
+    if not (_HAS_TRITON and device.type == "cuda"):
+        return False
+    if _is_rocm_backend():
+        return bool(torch.cuda.is_bf16_supported())
+    major, _ = torch.cuda.get_device_capability(device)
+    return major >= 8 and bool(torch.cuda.is_bf16_supported())
+
+
 # ==============================================================================
 # 1. EXACT PYTORCH REFERENCE FOR TRUE GVA PARITY VERIFICATION
 # ==============================================================================
@@ -836,10 +849,14 @@ class FlashVAULTv2Function(torch.autograd.Function):
 
         save_ckpts = any(ctx.needs_input_grad[:4])
         # Hardware-exact RDNA4 VGPR invariant (`BANK_PAD * BLOCK_DV == 128` in backward -> <=192 VGPRs, 7s compile!):
-        #   - Eval (`not save_ckpts`, 1 state matrix `S_reg`): `block_dv=4, scan_warps=8` for both `BP=32` and `BP=64`
-        #   - Train (`save_ckpts`, 3 state matrices in bwd): `block_dv=4` (`BP=32`) or `block_dv=2` (`BP=64`), `scan_warps=4`
+        #   - ROCm eval (`not save_ckpts`, 1 state matrix `S_reg`): `block_dv=4, scan_warps=8/16`
+        #   - NVIDIA CUDA (`not _is_rocm_backend()`): `scan_warps=4` (`128` threads/CTA) guarantees valid `m16n8k16`
+        #     TensorCore warp tiling for all `(32..64) x (64..256)` tiles and `<= 40 KB` SRAM!
         if not use_bf16_wmma:
             block_dv = 1
+            scan_warps = 4
+        elif not _is_rocm_backend():
+            block_dv = 4 if (not save_ckpts or bank_pad <= 32) else 2
             scan_warps = 4
         elif not save_ckpts:
             block_dv = 4
@@ -1061,6 +1078,49 @@ def flash_vault_v2_chunkwise(
     prime_banks: Tuple[int, int, int, int] = (17, 19, 23, 29),
     shared_group_cell_q: bool = False,
 ) -> torch.Tensor:
+    needs_grad = torch.is_grad_enabled() and any(t.requires_grad for t in (phi_q, phi_k, v, beta))
+    if max(prime_banks) > 64:
+        if _HAS_TRITON and phi_q.is_cuda and not needs_grad:
+            try:
+                from src.vault_v2_streaming import stateful_flash_vault_v2_chunkwise
+            except ImportError:
+                from ..vault_v2_streaming import stateful_flash_vault_v2_chunkwise  # type: ignore[no-redef]
+            B, _, _, D = phi_q.shape
+            G = phi_k.size(1)
+            total_cells = sum(int(p) for p in prime_banks)
+            S_state = torch.zeros((B, G, total_cells, D, D), device=v.device, dtype=torch.float32)
+            occ_state = torch.zeros((B, G, total_cells), device=v.device, dtype=torch.float32)
+            return stateful_flash_vault_v2_chunkwise(
+                phi_q,
+                phi_k,
+                v,
+                beta,
+                cell_q,
+                cell_k,
+                S_state,
+                occ_state,
+                chunk_size=chunk_size,
+                v2_1_consensus=v2_1_consensus,
+                v2_2_beta_occ=v2_2_beta_occ,
+                prime_banks=prime_banks,
+                shared_group_cell_q=shared_group_cell_q,
+            )
+        try:
+            from src.vault_v2_5_model import _vault_v2_5_cpu_chunkwise_autograd
+        except ImportError:
+            from ..vault_v2_5_model import _vault_v2_5_cpu_chunkwise_autograd  # type: ignore[no-redef]
+        return _vault_v2_5_cpu_chunkwise_autograd(
+            phi_q,
+            phi_k,
+            v,
+            beta,
+            cell_q,
+            cell_k,
+            chunk_size=chunk_size,
+            v2_2_beta_occ=v2_2_beta_occ,
+            prime_banks=prime_banks,
+        )
+
     if not (_HAS_TRITON and phi_q.is_cuda):
         return flash_vault_v2_recurrent_reference(
             phi_q,
@@ -1073,34 +1133,27 @@ def flash_vault_v2_chunkwise(
             v2_1_consensus=v2_1_consensus,
             v2_2_beta_occ=v2_2_beta_occ,
         )
-    if v.dtype == torch.float16:
-        if torch.cuda.is_bf16_supported():
-            out_bf16 = FlashVAULTv2Function.apply(
-                phi_q.to(torch.bfloat16),
-                phi_k.to(torch.bfloat16),
-                v.to(torch.bfloat16),
-                beta,
-                cell_q,
-                cell_k,
-                chunk_size,
-                v2_1_consensus,
-                ckpt_interval,
-                v2_2_beta_occ,
-                prime_banks,
-                shared_group_cell_q,
-            )
-            return out_bf16.to(torch.float16)
-        return flash_vault_v2_recurrent_reference(
-            phi_q,
-            phi_k,
-            v,
-            beta,
+
+    orig_dtype = v.dtype
+    bf16_ok = _gpu_supports_bf16_triton(v.device)
+    if orig_dtype == torch.float16 or (orig_dtype == torch.bfloat16 and not bf16_ok):
+        run_dt = torch.bfloat16 if bf16_ok else torch.float32
+        out_run = FlashVAULTv2Function.apply(
+            phi_q.to(run_dt),
+            phi_k.to(run_dt),
+            v.to(run_dt),
+            beta.to(run_dt) if beta.dtype != torch.float32 else beta,
             cell_q,
             cell_k,
-            num_cells=sum(prime_banks),
-            v2_1_consensus=v2_1_consensus,
-            v2_2_beta_occ=v2_2_beta_occ,
+            chunk_size,
+            v2_1_consensus,
+            ckpt_interval,
+            v2_2_beta_occ,
+            prime_banks,
+            shared_group_cell_q,
         )
+        return out_run.to(orig_dtype)
+
     return FlashVAULTv2Function.apply(
         phi_q,
         phi_k,
@@ -1324,7 +1377,7 @@ def causal_depthwise_conv1d(
     bias: Optional[torch.Tensor] = None,
     apply_silu: bool = False,
 ) -> torch.Tensor:
-    if not (_HAS_TRITON and x.is_cuda):
+    if not (_HAS_TRITON and x.is_cuda and (x.dtype != torch.bfloat16 or _gpu_supports_bf16_triton(x.device))):
         L = x.size(1)
         K = weight.size(-1)
         y = F.conv1d(x.transpose(1, 2), weight, bias, padding=K - 1, groups=x.size(-1))[..., :L].transpose(1, 2)

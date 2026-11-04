@@ -25,6 +25,7 @@ try:
 except ImportError:
     from configuration_vault import VAULTConfig, resolve_prime_banks
 
+from src.kernels.flash_vault_v2_triton import _gpu_supports_bf16_triton
 from src.vault_v2_5_model import (
     VAULTLMv2_5,
     compute_v2_5_shared_aux,
@@ -336,6 +337,8 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
         dt = self.embed_tokens.weight.dtype
         new_cfg = VAULTConfig.from_dict(self.config.to_dict())
         new_cfg.prime_banks = list(target_banks)
+        if sum(target_banks) > 220 and float(getattr(new_cfg, "occ_alpha", 0.5)) == 0.5:
+            new_cfg.occ_alpha = 1.5
 
         wide = VAULTForCausalLM(new_cfg)
         src_primes = tuple(int(p) for p in self.prime_banks)
@@ -389,6 +392,7 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
         occ_alpha: Optional[float] = None,
         segment_size: int = 4096,
         use_cudagraph: bool = True,
+        use_bf16_amp: Optional[bool] = None,
         on_token: Optional[Callable[[int], None]] = None,
         return_stats: bool = False,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Dict[str, float]]]:
@@ -402,14 +406,33 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
 
         dev = self.embed_tokens.weight.device
         inp = input_ids.to(dev)
-        occ = float(occ_alpha if occ_alpha is not None else getattr(self.config, "occ_alpha", 0.5))
+        if occ_alpha is not None:
+            occ = float(occ_alpha)
+        else:
+            cfg_occ = float(getattr(self.config, "occ_alpha", 0.5))
+            occ = 1.5 if (cfg_occ == 0.5 and (sum(self.prime_banks) > 220 or inp.size(1) > 4096)) else cfg_occ
+
         is_cuda = dev.type == "cuda" and torch.cuda.is_available()
+        w_dt = self.embed_tokens.weight.dtype
+        bf16_hw = is_cuda and _gpu_supports_bf16_triton(dev)
+        enable_bf16_amp = bool(
+            use_bf16_amp if use_bf16_amp is not None else (bf16_hw and w_dt == torch.float32)
+        )
         stop_set = set(int(x) for x in eos_token_ids if x is not None and int(x) >= 0)
         cg_ok = bool(
-            use_cudagraph and is_cuda and self.embed_tokens.weight.dtype in (torch.float32, torch.bfloat16)
+            use_cudagraph
+            and is_cuda
+            and (w_dt == torch.float32 or (w_dt == torch.bfloat16 and bf16_hw))
         )
 
-        amp_guard = torch.amp.autocast("cuda", enabled=False) if is_cuda else nullcontext()
+        if is_cuda:
+            amp_guard = (
+                torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16)
+                if enable_bf16_amp
+                else torch.amp.autocast("cuda", enabled=False)
+            )
+        else:
+            amp_guard = nullcontext()
         with amp_guard:
             if is_cuda:
                 torch.cuda.synchronize(dev)

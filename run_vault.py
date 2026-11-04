@@ -36,7 +36,12 @@ def load_vault_easy(
     device: str = "",
 ):
     if not device:
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            device = "cuda:0"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
 
     default_local = os.path.join(
         ROOT_DIR,
@@ -89,7 +94,12 @@ def load_vault_easy(
         print(f"[VAULT] Expanding Co-Prime Kenyon Cell banks via Zero-Shot Mitosis: {sum(model.prime_banks)} -> {cells} cells...", flush=True)
         model = model.expand_mitosis(cells)
 
-    hw_name = torch.cuda.get_device_name(0) if device.startswith("cuda") and torch.cuda.is_available() else "CPU"
+    if device.startswith("cuda") and torch.cuda.is_available():
+        hw_name = torch.cuda.get_device_name(0)
+    elif device == "mps":
+        hw_name = "Apple Silicon MPS"
+    else:
+        hw_name = "CPU"
     crt_cap = 1
     for p in model.prime_banks:
         crt_cap *= int(p)

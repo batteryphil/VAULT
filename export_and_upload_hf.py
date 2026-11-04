@@ -111,6 +111,12 @@ python run_vault.py --demo
 python run_vault.py
 ```
 
+### Hardware Compatibility (`NVIDIA CUDA` • `AMD ROCm` • `Apple Silicon` • `CPU`)
+- **NVIDIA CUDA (`RTX 30xx/40xx/50xx`, `L4`, `A100`, `H100`):** Native OpenAI/NVIDIA **Triton PTX TensorCore** chunkwise prefill (`<= 32 KB` shared memory across all `220c..2,002c` Mitosis presets), zero-external-FFT register-DFT Triton decode kernels, and `torch.cuda.CUDAGraph`.
+- **Older NVIDIA GPUs (`T4`, `RTX 20xx`, `V100`):** Automatic `FP32` Triton & `FP16` support on `SM < 8.0`.
+- **AMD ROCm (`RDNA3/RDNA4/CDNA`):** Native Triton `BF16` WMMA + HIPGraph acceleration.
+- **Apple Silicon (`mps`) & `CPU`:** Automatic pure-PyTorch Compact-WY fallback when Triton/CUDA is not present.
+
 ---
 
 ## 📊 Empirical Benchmarks (`VAULT v2.4 @ Step 10k` Base vs. `VAULT v2.5` SFT)

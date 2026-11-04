@@ -52,6 +52,8 @@ from src.vault_v2_model import (
     fft_circular_bind,
 )
 from src.kernels.flash_vault_v2_triton import (
+    _gpu_supports_bf16_triton,
+    _is_rocm_backend,
     _mdot,
     _vault_v2_wy_fwd,
     _vault_v2_chunk_occ_hist_fwd,
@@ -342,14 +344,42 @@ def stateful_flash_vault_v2_chunkwise(
     Stateful chunkwise Co-Prime fast-weight scan on GPU (Triton WMMA) or CPU (Compact-WY PyTorch).
     Supports `max(prime_banks) <= 512` (`BANK_PAD in {32, 64, 128, 256, 512}`)!
     """
-    if not (_HAS_TRITON and phi_q.is_cuda and v.dtype in (torch.float32, torch.bfloat16)):
+    if not (_HAS_TRITON and phi_q.is_cuda):
         return _stateful_vault_v2_cpu_chunkwise(
             phi_q, phi_k, v, beta, cell_q, cell_k, S_state, occ_state,
             chunk_size=chunk_size, v2_2_beta_occ=v2_2_beta_occ, occ_alpha=occ_alpha,
         )
 
     orig_dtype = v.dtype
+    bf16_ok = _gpu_supports_bf16_triton(v.device)
+    if orig_dtype == torch.float16 or (orig_dtype == torch.bfloat16 and not bf16_ok):
+        run_dt = torch.bfloat16 if bf16_ok else torch.float32
+        out_run = stateful_flash_vault_v2_chunkwise(
+            phi_q.to(run_dt),
+            phi_k.to(run_dt),
+            v.to(run_dt),
+            beta.to(run_dt) if beta.dtype != torch.float32 else beta,
+            cell_q,
+            cell_k,
+            S_state,
+            occ_state,
+            chunk_size=chunk_size,
+            v2_1_consensus=v2_1_consensus,
+            v2_2_beta_occ=v2_2_beta_occ,
+            prime_banks=prime_banks,
+            shared_group_cell_q=shared_group_cell_q,
+            occ_alpha=occ_alpha,
+        )
+        return out_run.to(orig_dtype)
+
+    if orig_dtype not in (torch.float32, torch.bfloat16):
+        return _stateful_vault_v2_cpu_chunkwise(
+            phi_q, phi_k, v, beta, cell_q, cell_k, S_state, occ_state,
+            chunk_size=chunk_size, v2_2_beta_occ=v2_2_beta_occ, occ_alpha=occ_alpha,
+        )
+
     use_bf16_wmma = orig_dtype == torch.bfloat16
+    is_rocm = _is_rocm_backend()
 
     p0, p1, p2, p3 = int(prime_banks[0]), int(prime_banks[1]), int(prime_banks[2]), int(prime_banks[3])
     c1 = p0
@@ -372,8 +402,15 @@ def stateful_flash_vault_v2_chunkwise(
     _, G, R, _ = cell_k.shape
     assert D == 64 and R == 4
 
-    # Keep `BANK_PAD * BLOCK_DV <= 512` (~32-64 VGPRs/lane with 16 warps on RDNA4)
-    if not use_bf16_wmma:
+    # Hardware-aware tile & warp scheduling:
+    #   - ROCm RDNA4: `BANK_PAD * BLOCK_DV <= 512` (~32-64 VGPRs/lane with 8/16 wavefronts) and `tile_p <= 256`.
+    #   - NVIDIA CUDA: `tile_p <= 64` and `scan_warps = 4` keeps shared memory `<= 32 KB` across all `88c..2002c`
+    #     presets (fitting Turing T4 `64 KB`, Ampere/Ada RTX 30xx/40xx `99 KB`, and A100/H100/Blackwell) with valid
+    #     `m16n8k16` TensorCore warp tiling!
+    if not is_rocm:
+        block_dv = 1 if not use_bf16_wmma else (4 if bank_pad <= 32 else 2)
+        scan_warps = 4
+    elif not use_bf16_wmma:
         block_dv = 1
         scan_warps = 4 if bank_pad <= 256 else 8
     elif bank_pad <= 32:
@@ -463,7 +500,7 @@ def stateful_flash_vault_v2_chunkwise(
     )
     del ChunkPrior
 
-    tile_p = min(bank_pad, 256)
+    tile_p = min(bank_pad, 256 if is_rocm else 64)
     num_p_tiles = bank_pad // tile_p
     _vault_v2_stateful_inter_scan_fwd[(B * G * R, num_dv_blocks, num_p_tiles)](
         pq, pk, U, W, cq, ck,
@@ -1904,7 +1941,10 @@ class VAULTv2StreamingEngine:
             ck_t = torch.cat([cell_k_raw[:, :n_keep_g], ck_ind_w], dim=1).squeeze(-1).contiguous()      # (B, 4, 4)
             pq_t = phi_q.float().squeeze(2).contiguous()                                                # (B, 12, D)
 
-            if dev.type == "cuda" and shared_group_q and attn.heads_per_group == 3:
+            use_triton_fw = _HAS_TRITON and dev.type == "cuda" and (
+                comp_dt == torch.float32 or (comp_dt == torch.bfloat16 and _gpu_supports_bf16_triton(dev))
+            )
+            if use_triton_fw and shared_group_q and attn.heads_per_group == 3:
                 cq_t = cq_u.squeeze(-1).contiguous()
                 _vault_v2_decode_fw_kernel[(B * G,)](
                     ls.S_state,

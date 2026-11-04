@@ -37,7 +37,7 @@ except ImportError:
     _HAS_TRITON = False
     from src.kernels.flash_vault_v2_triton import triton, tl  # type: ignore
 
-from src.kernels.flash_vault_v2_triton import causal_depthwise_conv1d
+from src.kernels.flash_vault_v2_triton import _gpu_supports_bf16_triton, causal_depthwise_conv1d
 from src.vault_v2_5_model import (
     VAULTLMv2_5,
     VAULTv2_5Attention,
@@ -1440,7 +1440,11 @@ class VAULTv2_5StreamingEngine:
         C = model.chunk_size
         dev = token_id.device
         comp_dt = cache.comp_dt
-        use_triton_gpu = _HAS_TRITON and (dev.type == "cuda") and (comp_dt in (torch.float32, torch.bfloat16))
+        use_triton_gpu = (
+            _HAS_TRITON
+            and (dev.type == "cuda")
+            and (comp_dt == torch.float32 or (comp_dt == torch.bfloat16 and _gpu_supports_bf16_triton(dev)))
+        )
         d_m = model.d_model
         pack = cls._get_decode_static_pack(model, comp_dt, dev)
 

@@ -56,6 +56,12 @@ python run_vault.py
 python run_vault.py --cells 2002 --prompt "Write a C++20 RAII file descriptor wrapper."
 ```
 
+### 💻 Cross-Vendor Hardware Support (`NVIDIA CUDA` • `AMD ROCm` • `Apple Silicon` • `CPU`)
+* **NVIDIA CUDA GPUs (`Ampere` RTX 30xx / A100, `Ada` RTX 40xx / L4, `Hopper` H100, `Blackwell` RTX 50xx):** Full native acceleration via vendor-neutral **Triton PTX TensorCore** chunkwise prefill (`tile_p <= 64`, `<= 32 KB` shared memory across all `220c..2,002c` Mitosis presets), fused register-DFT Triton decode kernels, and `torch.cuda.CUDAGraph`.
+* **Pre-Ampere NVIDIA GPUs (`Turing` Colab T4 / RTX 20xx, `Volta` V100):** Automatic `FP32` Triton / `FP16` fallback when hardware `bfloat16` TensorCores (`SM < 8.0`) are unavailable.
+* **AMD ROCm GPUs (`RDNA3` / `RDNA4` / `CDNA`):** Full native Triton `BF16` WMMA + HIPGraph acceleration.
+* **Apple Silicon (`mps`) & `CPU`:** Zero-dependency vectorized Compact-WY PyTorch fallback (`run_vault.py` auto-detects `cuda` $\rightarrow$ `mps` $\rightarrow$ `cpu`).
+
 ---
 
 ## 🏆 `VAULT v2.5` (`180.6M`) — Architecture, $\mathcal{O}(1)$ Streaming & Empirical Benchmarks
