@@ -57,10 +57,8 @@ def atomic_save_json(data: Dict, path: str) -> None:
 # ==============================================================================
 
 def extract_backbone_hidden(model: nn.Module, input_ids: torch.Tensor) -> torch.Tensor:
-    """
-    Runs strictly causal backbone forward pass without materializing `(B, T_pad, V)` full-sequence logits.
-    Right-padding up to a multiple of 64 is mathematically bit-exact across VAULT, Mamba-1/2/3, and Transformer.
-    """
+    if hasattr(model, "forward_hidden"):
+        return model.forward_hidden(input_ids, mode="block", vault_on=True)
     if hasattr(model, "_encode_hidden"):
         return model._encode_hidden(input_ids, step_ratio=1.0)
     if hasattr(model, "encode_hidden"):
@@ -539,6 +537,23 @@ def load_vault_v2_5_ckpt(ckpt_name: str, default_primes: Tuple[int, ...], device
     return model.to(device).eval(), tok
 
 
+def load_vault_v3_loader(device: str):
+    import json
+    from src.vault_v3_model import VAULTv3Config, VAULTv3ForCausalLM, load_qwen2_into_vault, load_vault_params
+    from train_vault_v3_stage_a import DEFAULT_QWEN
+    with open(os.path.join(DEFAULT_QWEN, "config.json")) as f:
+        qc = json.load(f)
+    cfg = VAULTv3Config.from_qwen_config(qc, window=1024)
+    tok = AutoTokenizer.from_pretrained(DEFAULT_QWEN)
+    m = VAULTv3ForCausalLM(cfg)
+    load_qwen2_into_vault(m, DEFAULT_QWEN)
+    best_ck = os.path.join(ROOT_DIR, "checkpoints", "vault_v3_stage_a_best.pt")
+    if os.path.isfile(best_ck):
+        load_vault_params(m, best_ck)
+    m.lm_head = m.lm_logits
+    return m.to(device, torch.bfloat16).eval(), tok
+
+
 def _probe_ckpt_meta(ckpt_path: str, base_tok_b: float = 0.275, default_step: int = 0) -> Tuple[float, int]:
     if not os.path.exists(ckpt_path):
         return base_tok_b, default_step
@@ -652,6 +667,12 @@ def main():
             "title": "Transformer SmolLM-135M (134.5M, 600B tok)",
             "pretrain_tokens_B": 600.0,
             "loader": lambda: load_transformer_smollm_135m(device=device, grad_checkpoint=False),
+        },
+        {
+            "key": "VAULT_v3_1.5B",
+            "title": "VAULT v3 (1.54B, 49c, Qwen2.5 Backbone + Kenyon Vault)",
+            "pretrain_tokens_B": 18000.0,
+            "loader": lambda: load_vault_v3_loader(device=device),
         },
     ]
 

@@ -59,6 +59,8 @@ tags:
 **GitHub Repository:** [`https://github.com/batteryphil/VAULT`](https://github.com/batteryphil/VAULT)  
 **License:** MIT  
 
+> **New — Looking for the 1.54B quantized (`BF16`/`Q8_0`/`Q4_0`) + freestanding C99 (`-ffreestanding -nostdlib`) release?** See **[`batteryphil/VAULT-v3-1.5B`](https://huggingface.co/batteryphil/VAULT-v3-1.5B)**.
+
 **VAULT** (**V**ariance-Weighted **A**ssociative **U**nitary **L**attice **T**ensor) is a 180.6M-parameter post-Transformer, post-SSM recurrent sequence architecture (`d_model=768`, `n_layers=16`, `H_q=12`, `G_vault=4`, `d_head=64`, `d_ff=2048`) trained from scratch on a single consumer 16 GB GPU (`AMD Radeon RX 9060 XT`) on **`0.594B` total tokens** (`0.575B` base continual pretraining + `19.7M` precision SFT tokens).
 
 Instead of an unbounded $\\mathcal{O}(T)$ KV-cache (Transformers) or a single exponentially decaying state matrix (Mamba / linear RNNs), VAULT routes high-salience entities into **4 Co-Prime Kenyon Cell fast-weight banks** ($P = \\{47, 53, 59, 61\\} = 220$ cells, $8.97\\text{M}$ CRT addresses) via phase-bound circular convolution, where **unaddressed memory cells have zero passive temporal decay ($\\gamma = 1.0$)** and capacity can be expanded **zero-shot at inference time** up to **$2,002$ cells ($P = \\{491, 499, 503, 509\\}$, $62.7\\text{B}$ CRT addresses)** via **Elastic Co-Prime Mitosis** without changing per-token decode latency.
@@ -415,6 +417,7 @@ print("Clean-room multi-call CUDAGraph + 508c Mitosis verified!")
 """
     env = dict(os.environ)
     env.pop("PYTHONPATH", None)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["TOKENIZERS_PARALLELISM"] = "false"
     subprocess.run([sys.executable, "-c", test_code], cwd="/tmp", env=env, stdin=subprocess.DEVNULL, check=True)
 
@@ -427,6 +430,8 @@ def upload_to_hf(out_dir: str, repo_id: str) -> str:
         folder_path=out_dir,
         repo_id=repo_id,
         repo_type="model",
+        ignore_patterns=["__pycache__/**", "*.pyc"],
+        delete_patterns=["__pycache__/**"],
         commit_message="Release VAULT v2.5 (180.6M) + v2.4 Step 10k Base, Zero-rocFFT O(1) Streaming Engine & AutoModelForCausalLM support",
     )
     print(f"[+] Uploaded successfully: {url} (commit: {commit_info.oid if hasattr(commit_info, 'oid') else commit_info})")

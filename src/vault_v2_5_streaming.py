@@ -241,29 +241,164 @@ def _vault_v2_5_salience_pool_decode_kernel(
 
 
 @triton.jit
+def _vault_v2_5_decode_fw_kernel(
+    S_ptr,
+    Occ_ptr,
+    K_ptr,
+    V_ptr,
+    Beta_ptr,
+    CK_ptr,
+    CQ_ptr,
+    Q_ptr,
+    Out_ptr,
+    total_cells,
+    OCC_ALPHA: tl.constexpr,
+    D: tl.constexpr,
+    OUT_BF16: tl.constexpr,
+    HEADS_PER_GROUP: tl.constexpr = 3,
+):
+    """
+    Fused single-token 4-bank Co-Prime Delta-rule write + occupancy update + `3`- or `6`-subhead consensus readout.
+    Replaces ~38 eager ATen/einsum/gather/scatter kernels per layer with 1 tiny `B * G`-block Triton launch!
+    """
+    bg = tl.program_id(0).to(tl.int64)
+    offs_v = tl.arange(0, D)
+    offs_d = tl.arange(0, D)
+
+    k = tl.load(K_ptr + bg * D + offs_d).to(tl.float32)
+    v = tl.load(V_ptr + bg * D + offs_v).to(tl.float32)
+    beta = tl.load(Beta_ptr + bg).to(tl.float32)
+    q0 = tl.load(Q_ptr + (bg * HEADS_PER_GROUP + 0) * D + offs_d).to(tl.float32)
+    q1 = tl.load(Q_ptr + (bg * HEADS_PER_GROUP + 1) * D + offs_d).to(tl.float32)
+    q2 = tl.load(Q_ptr + (bg * HEADS_PER_GROUP + 2) * D + offs_d).to(tl.float32)
+    if HEADS_PER_GROUP == 6:
+        q3 = tl.load(Q_ptr + (bg * HEADS_PER_GROUP + 3) * D + offs_d).to(tl.float32)
+        q4 = tl.load(Q_ptr + (bg * HEADS_PER_GROUP + 4) * D + offs_d).to(tl.float32)
+        q5 = tl.load(Q_ptr + (bg * HEADS_PER_GROUP + 5) * D + offs_d).to(tl.float32)
+
+    acc0 = tl.zeros([D], dtype=tl.float32)
+    acc1 = tl.zeros([D], dtype=tl.float32)
+    acc2 = tl.zeros([D], dtype=tl.float32)
+    u0 = tl.zeros([D], dtype=tl.float32)
+    u1 = tl.zeros([D], dtype=tl.float32)
+    u2 = tl.zeros([D], dtype=tl.float32)
+    if HEADS_PER_GROUP == 6:
+        acc3 = tl.zeros([D], dtype=tl.float32)
+        acc4 = tl.zeros([D], dtype=tl.float32)
+        acc5 = tl.zeros([D], dtype=tl.float32)
+        u3 = tl.zeros([D], dtype=tl.float32)
+        u4 = tl.zeros([D], dtype=tl.float32)
+        u5 = tl.zeros([D], dtype=tl.float32)
+    w_sum = 0.0
+
+    tc64 = total_cells.to(tl.int64)
+    s_base = S_ptr + bg * tc64 * D * D
+    o_base = Occ_ptr + bg * tc64
+
+    for r in range(4):
+        cw = tl.load(CK_ptr + bg * 4 + r).to(tl.int64)
+        cq = tl.load(CQ_ptr + bg * 4 + r).to(tl.int64)
+        cw_ptr = s_base + cw * D * D + offs_v[:, None] * D + offs_d[None, :]
+        S_w = tl.load(cw_ptr)
+        pred_v = tl.sum(S_w * k[None, :], axis=1)
+        S_w_new = S_w + (beta * (v - pred_v))[:, None] * k[None, :]
+        tl.store(cw_ptr, S_w_new)
+        occ_w = tl.load(o_base + cw) + beta
+        tl.store(o_base + cw, occ_w)
+
+        if cq == cw:
+            S_q = S_w_new
+            nq = occ_w
+        else:
+            cq_ptr = s_base + cq * D * D + offs_v[:, None] * D + offs_d[None, :]
+            S_q = tl.load(cq_ptr)
+            nq = tl.load(o_base + cq)
+
+        if OCC_ALPHA == 0.5:
+            wr = tl.where(nq > 1e-3, tl.rsqrt(1.0 + nq), 0.0)
+        elif OCC_ALPHA == 1.0:
+            wr = tl.where(nq > 1e-3, 1.0 / (1.0 + nq), 0.0)
+        elif OCC_ALPHA == 1.5:
+            wr = tl.where(nq > 1e-3, tl.rsqrt(1.0 + nq) / (1.0 + nq), 0.0)
+        else:
+            wr = tl.where(nq > 1e-3, tl.exp2(-OCC_ALPHA * tl.log2(1.0 + nq)), 0.0)
+
+        y0 = tl.sum(S_q * q0[None, :], axis=1)
+        y1 = tl.sum(S_q * q1[None, :], axis=1)
+        y2 = tl.sum(S_q * q2[None, :], axis=1)
+        u0 += y0 * 0.25
+        u1 += y1 * 0.25
+        u2 += y2 * 0.25
+        acc0 += y0 * wr
+        acc1 += y1 * wr
+        acc2 += y2 * wr
+        if HEADS_PER_GROUP == 6:
+            y3 = tl.sum(S_q * q3[None, :], axis=1)
+            y4 = tl.sum(S_q * q4[None, :], axis=1)
+            y5 = tl.sum(S_q * q5[None, :], axis=1)
+            u3 += y3 * 0.25
+            u4 += y4 * 0.25
+            u5 += y5 * 0.25
+            acc3 += y3 * wr
+            acc4 += y4 * wr
+            acc5 += y5 * wr
+        w_sum += wr
+
+    use_w = w_sum > 1e-6
+    inv_w = 1.0 / tl.maximum(w_sum, 1e-6)
+    o0 = tl.where(use_w, acc0 * inv_w, u0)
+    o1 = tl.where(use_w, acc1 * inv_w, u1)
+    o2 = tl.where(use_w, acc2 * inv_w, u2)
+    if HEADS_PER_GROUP == 6:
+        o3 = tl.where(use_w, acc3 * inv_w, u3)
+        o4 = tl.where(use_w, acc4 * inv_w, u4)
+        o5 = tl.where(use_w, acc5 * inv_w, u5)
+
+    out_grp = Out_ptr + bg * HEADS_PER_GROUP * D
+    if OUT_BF16:
+        tl.store(out_grp + 0 * D + offs_v, o0.to(tl.bfloat16))
+        tl.store(out_grp + 1 * D + offs_v, o1.to(tl.bfloat16))
+        tl.store(out_grp + 2 * D + offs_v, o2.to(tl.bfloat16))
+        if HEADS_PER_GROUP == 6:
+            tl.store(out_grp + 3 * D + offs_v, o3.to(tl.bfloat16))
+            tl.store(out_grp + 4 * D + offs_v, o4.to(tl.bfloat16))
+            tl.store(out_grp + 5 * D + offs_v, o5.to(tl.bfloat16))
+    else:
+        tl.store(out_grp + 0 * D + offs_v, o0)
+        tl.store(out_grp + 1 * D + offs_v, o1)
+        tl.store(out_grp + 2 * D + offs_v, o2)
+        if HEADS_PER_GROUP == 6:
+            tl.store(out_grp + 3 * D + offs_v, o3)
+            tl.store(out_grp + 4 * D + offs_v, o4)
+            tl.store(out_grp + 5 * D + offs_v, o5)
+
+
+@triton.jit
 def _vault_v2_5_local_syntax_decode_kernel(
     KWin_ptr,        # (B, G, 128, 64) comp_dt, updated in-place
     VWin_ptr,        # (B, G, 128, 64) comp_dt, updated in-place
-    QNorm_ptr,       # (B, 12, 64) comp_dt
+    QNorm_ptr,       # (B, 4*HEADS_PER_GROUP, 64) comp_dt
     KNorm_ptr,       # (B, G, 64) comp_dt
     VCur_ptr,        # (B, G, 64) comp_dt
     CosQ_ptr,        # (64, 32) float32
     SinQ_ptr,        # (64, 32) float32
     CosK_ptr,        # (128, 32) float32
     SinK_ptr,        # (128, 32) float32
-    Bias_ptr,        # (12, 64, 128) float32 (`_local_attn_bias`)
+    Bias_ptr,        # (4*HEADS_PER_GROUP, 64, 128) float32 (`_local_attn_bias`)
     TPos_ptr,        # (1,) int64
-    YSyn_ptr,        # (B, 12, 64) comp_dt
+    YSyn_ptr,        # (B, 4*HEADS_PER_GROUP, 64) comp_dt
     OUT_BF16: tl.constexpr,
+    HEADS_PER_GROUP: tl.constexpr = 3,
 ):
     """
-    Fused `64 x 128` Chunk-Local RoPE + Multi-Scale Decay Syntax Attention decode kernel (`G = 4`, `3` heads/group):
+    Fused `64 x 128` Chunk-Local RoPE + Multi-Scale Decay Syntax Attention decode kernel (`G = 4`, `3` or `6` heads/group):
       - Strictly two-phase (all global loads -> `tl.debug_barrier()` -> disjoint single-write global stores)
         eliminating inter-warp RAW / WAR / WAW hazards at `64`-token chunk rollovers.
     """
     bg = tl.program_id(0).to(tl.int64)
     b = bg // 4
     g = bg % 4
+    n_heads = 4 * HEADS_PER_GROUP
 
     t_pos = tl.load(TPos_ptr).to(tl.int64)
     q_in = (t_pos % 64).to(tl.int64)
@@ -313,8 +448,8 @@ def _vault_v2_5_local_syntax_decode_kernel(
         cq = cq.to(tl.bfloat16).to(tl.float32)
         sq = sq.to(tl.bfloat16).to(tl.float32)
 
-    h0 = g * 3
-    q_base = QNorm_ptr + (b * 12 + h0) * 64
+    h0 = g * HEADS_PER_GROUP
+    q_base = QNorm_ptr + (b * n_heads + h0) * 64
 
     q0_ev = tl.load(q_base + 0 * 64 + 2 * offs_32).to(tl.float32)
     q0_od = tl.load(q_base + 0 * 64 + 2 * offs_32 + 1).to(tl.float32)
@@ -336,6 +471,28 @@ def _vault_v2_5_local_syntax_decode_kernel(
         qr1_od = qr1_od.to(tl.bfloat16).to(tl.float32)
         qr2_ev = qr2_ev.to(tl.bfloat16).to(tl.float32)
         qr2_od = qr2_od.to(tl.bfloat16).to(tl.float32)
+
+    if HEADS_PER_GROUP == 6:
+        q3_ev = tl.load(q_base + 3 * 64 + 2 * offs_32).to(tl.float32)
+        q3_od = tl.load(q_base + 3 * 64 + 2 * offs_32 + 1).to(tl.float32)
+        q4_ev = tl.load(q_base + 4 * 64 + 2 * offs_32).to(tl.float32)
+        q4_od = tl.load(q_base + 4 * 64 + 2 * offs_32 + 1).to(tl.float32)
+        q5_ev = tl.load(q_base + 5 * 64 + 2 * offs_32).to(tl.float32)
+        q5_od = tl.load(q_base + 5 * 64 + 2 * offs_32 + 1).to(tl.float32)
+
+        qr3_ev = q3_ev * cq - q3_od * sq
+        qr3_od = q3_ev * sq + q3_od * cq
+        qr4_ev = q4_ev * cq - q4_od * sq
+        qr4_od = q4_ev * sq + q4_od * cq
+        qr5_ev = q5_ev * cq - q5_od * sq
+        qr5_od = q5_ev * sq + q5_od * cq
+        if OUT_BF16:
+            qr3_ev = qr3_ev.to(tl.bfloat16).to(tl.float32)
+            qr3_od = qr3_od.to(tl.bfloat16).to(tl.float32)
+            qr4_ev = qr4_ev.to(tl.bfloat16).to(tl.float32)
+            qr4_od = qr4_od.to(tl.bfloat16).to(tl.float32)
+            qr5_ev = qr5_ev.to(tl.bfloat16).to(tl.float32)
+            qr5_od = qr5_od.to(tl.bfloat16).to(tl.float32)
 
     ck = tl.load(CosK_ptr + offs_128[:, None] * 32 + offs_32[None, :])
     sk = tl.load(SinK_ptr + offs_128[:, None] * 32 + offs_32[None, :])
@@ -379,6 +536,30 @@ def _vault_v2_5_local_syntax_decode_kernel(
     y1 = tl.sum(p1[:, None] * v_win, axis=0)
     y2 = tl.sum(p2[:, None] * v_win, axis=0)
 
+    if HEADS_PER_GROUP == 6:
+        b_ptr3 = Bias_ptr + ((h0 + 3) * 64 + q_in) * 128 + offs_128
+        b_ptr4 = Bias_ptr + ((h0 + 4) * 64 + q_in) * 128 + offs_128
+        b_ptr5 = Bias_ptr + ((h0 + 5) * 64 + q_in) * 128 + offs_128
+        l3 = (tl.sum(kr_ev * qr3_ev[None, :], axis=1) + tl.sum(kr_od * qr3_od[None, :], axis=1)) * scale
+        l4 = (tl.sum(kr_ev * qr4_ev[None, :], axis=1) + tl.sum(kr_od * qr4_od[None, :], axis=1)) * scale
+        l5 = (tl.sum(kr_ev * qr5_ev[None, :], axis=1) + tl.sum(kr_od * qr5_od[None, :], axis=1)) * scale
+        l3 = tl.where(valid, l3 + tl.load(b_ptr3), -1e9)
+        l4 = tl.where(valid, l4 + tl.load(b_ptr4), -1e9)
+        l5 = tl.where(valid, l5 + tl.load(b_ptr5), -1e9)
+        e3 = tl.exp(l3 - tl.max(l3, axis=0))
+        e4 = tl.exp(l4 - tl.max(l4, axis=0))
+        e5 = tl.exp(l5 - tl.max(l5, axis=0))
+        p3 = e3 / tl.sum(e3, axis=0)
+        p4 = e4 / tl.sum(e4, axis=0)
+        p5 = e5 / tl.sum(e5, axis=0)
+        if OUT_BF16:
+            p3 = p3.to(tl.bfloat16).to(tl.float32)
+            p4 = p4.to(tl.bfloat16).to(tl.float32)
+            p5 = p5.to(tl.bfloat16).to(tl.float32)
+        y3 = tl.sum(p3[:, None] * v_win, axis=0)
+        y4 = tl.sum(p4[:, None] * v_win, axis=0)
+        y5 = tl.sum(p5[:, None] * v_win, axis=0)
+
     # Ensure all wavefronts finish Phase-1 loads before any Phase-2 in-place store
     tl.debug_barrier()
 
@@ -395,15 +576,23 @@ def _vault_v2_5_local_syntax_decode_kernel(
         tl.store(kw_base + pos_cur * 64 + offs_d, k_cur)
         tl.store(vw_base + pos_cur * 64 + offs_d, v_cur)
 
-    out_base = YSyn_ptr + (b * 12 + h0) * 64
+    out_base = YSyn_ptr + (b * n_heads + h0) * 64
     if OUT_BF16:
         tl.store(out_base + 0 * 64 + offs_d, y0.to(tl.bfloat16))
         tl.store(out_base + 1 * 64 + offs_d, y1.to(tl.bfloat16))
         tl.store(out_base + 2 * 64 + offs_d, y2.to(tl.bfloat16))
+        if HEADS_PER_GROUP == 6:
+            tl.store(out_base + 3 * 64 + offs_d, y3.to(tl.bfloat16))
+            tl.store(out_base + 4 * 64 + offs_d, y4.to(tl.bfloat16))
+            tl.store(out_base + 5 * 64 + offs_d, y5.to(tl.bfloat16))
     else:
         tl.store(out_base + 0 * 64 + offs_d, y0)
         tl.store(out_base + 1 * 64 + offs_d, y1)
         tl.store(out_base + 2 * 64 + offs_d, y2)
+        if HEADS_PER_GROUP == 6:
+            tl.store(out_base + 3 * 64 + offs_d, y3)
+            tl.store(out_base + 4 * 64 + offs_d, y4)
+            tl.store(out_base + 5 * 64 + offs_d, y5)
 
 
 # ==============================================================================
@@ -680,7 +869,11 @@ class VAULTv2_5StreamingEngine:
     @classmethod
     @torch.no_grad()
     def init_cache(
-        cls, model: VAULTLMv2_5, batch_size: int = 1, dtype: Optional[torch.dtype] = None
+        cls,
+        model: VAULTLMv2_5,
+        batch_size: int = 1,
+        dtype: Optional[torch.dtype] = None,
+        disable_prior: bool = False,
     ) -> VAULTv2_5StreamCache:
         dev = model.embed_tokens.weight.device
         comp_dt = dtype if dtype is not None else cls._infer_compute_dtype(model, dev)
@@ -698,11 +891,24 @@ class VAULTv2_5StreamingEngine:
         cms_b = [cms_b_pad[:, i, :p] for i, p in enumerate(b0.BANKS)]
 
         layers: List[LayerStreamStateV2_5] = []
-        for _ in range(model.n_layers):
+        for blk in model.layers:
+            attn_l: VAULTv2_5Attention = blk.attn
+            s0_c = (
+                attn_l.lex_router_g2.weight.size(0)
+                + attn_l.lex_router_g3.weight.size(0)
+                + attn_l.ind_read_proj.weight.size(0)
+            )
+            if (not disable_prior) and (attn_l.s_prior is not None):
+                s_st = attn_l.s_prior.detach().float().expand(B, G, total_cells, D, D).clone()
+                occ_st = attn_l.get_occ_prior().expand(B, G, total_cells).clone()
+            else:
+                s_st = torch.zeros((B, G, total_cells, D, D), device=dev, dtype=torch.float32)
+                occ_st = torch.zeros((B, G, total_cells), device=dev, dtype=torch.float32)
+
             layers.append(
                 LayerStreamStateV2_5(
-                    S_state=torch.zeros((B, G, total_cells, D, D), device=dev, dtype=torch.float32),
-                    occ_state=torch.zeros((B, G, total_cells), device=dev, dtype=torch.float32),
+                    S_state=s_st,
+                    occ_state=occ_st,
                     v_ema=torch.zeros((B, G, 1, D), device=dev, dtype=torch.float32),
                     qkv_conv_state=torch.zeros((B, 3, qkv_c), device=dev, dtype=comp_dt),
                     prev_ib_rms_p1=torch.zeros((B, 1, 3), device=dev, dtype=comp_dt),
@@ -714,7 +920,7 @@ class VAULTv2_5StreamingEngine:
                     a_left_ring=torch.zeros((B, 11, 2, 2, D), device=dev, dtype=torch.float32),
                     a_ctx_win=torch.zeros((B, 3, 128, 128), device=dev, dtype=comp_dt),
                     sal_win=torch.full((B, 3, 128), -1e4, device=dev, dtype=torch.float32),
-                    prev_x0n_s1=torch.zeros((B, 1, 393), device=dev, dtype=comp_dt),
+                    prev_x0n_s1=torch.zeros((B, 1, s0_c), device=dev, dtype=comp_dt),
                     prev_x0n_s2=torch.zeros((B, 2, 128), device=dev, dtype=comp_dt),
                     r_all_prev=torch.zeros((B, 1, 3, D), device=dev, dtype=torch.float32),
                     u_ind_prev=torch.zeros((B, 1, 3, D), device=dev, dtype=torch.float32),
@@ -849,13 +1055,7 @@ class VAULTv2_5StreamingEngine:
         x0_sb = x0_ext[:, -L_sb:]
         nov4_seg = cms_ext["nov4"][:, :, -S:]
 
-        alpha_ema = float(model.ema_alpha)
-        gamma_ema = 1.0 - alpha_ema
-        ema_bc_seg = compute_ema_bias_correction(S, dev, alpha=alpha_ema, start_pos=T_0)
-        ema_carry_pow = torch.pow(
-            torch.tensor(gamma_ema, device=dev, dtype=torch.float64),
-            torch.arange(1, S + 1, device=dev, dtype=torch.float64),
-        ).to(torch.float32).view(1, 1, S, 1)
+        ema_seg_cache: Dict[float, Tuple[float, torch.Tensor, torch.Tensor]] = {}
 
         H_x0n = min(T_0, 2)
         x0_for_lex = x0_ext[:, -(H_x0n + S) :]
@@ -864,6 +1064,20 @@ class VAULTv2_5StreamingEngine:
             attn: VAULTv2_5Attention = blk.attn
             ls = cache.layers[l_idx]
             h_in = blk.norm1(x)
+
+            alpha_ema = float(attn.ema_alpha)
+            ema_entry = ema_seg_cache.get(alpha_ema)
+            if ema_entry is None:
+                gamma_ema = 1.0 - alpha_ema
+                ema_bc_seg = compute_ema_bias_correction(S, dev, alpha=alpha_ema, start_pos=T_0)
+                ema_carry_pow = torch.pow(
+                    torch.tensor(gamma_ema, device=dev, dtype=torch.float64),
+                    torch.arange(1, S + 1, device=dev, dtype=torch.float64),
+                ).to(torch.float32).view(1, 1, S, 1)
+                ema_entry = (gamma_ema, ema_bc_seg, ema_carry_pow)
+                ema_seg_cache[alpha_ema] = ema_entry
+            else:
+                gamma_ema, ema_bc_seg, ema_carry_pow = ema_entry
 
             n_keep_g = attn.n_keep_g
             n_keep_h = n_keep_g * attn.heads_per_group
@@ -1247,9 +1461,11 @@ class VAULTv2_5StreamingEngine:
             + blk.mlp.w1.weight._version
             + blk.mlp.w2.weight._version
             + blk.mlp.w3.weight._version
+            + (blk.attn.s_prior._version if blk.attn.s_prior is not None else 0)
             for blk in model.layers
         )
-        pack_key = (dev, comp_dt, tuple(model.prime_banks), ver_sum)
+        ema_sig = tuple(round(float(blk.attn.ema_alpha), 12) for blk in model.layers)
+        pack_key = (dev, comp_dt, tuple(model.prime_banks), ema_sig, ver_sum)
         cached = getattr(model, "_decode_static_pack_v2_5", None)
         if cached is not None and cached[0] == pack_key:
             return cached[1]
@@ -1363,6 +1579,7 @@ class VAULTv2_5StreamingEngine:
 
             mlp_w12 = torch.cat([blk.mlp.w1.weight, blk.mlp.w2.weight], dim=0).to(comp_dt).contiguous()
             mlp_w3 = blk.mlp.w3.weight.to(comp_dt).contiguous()
+            alpha_ema_l = float(attn.ema_alpha)
 
             layer_packs.append(
                 {
@@ -1396,9 +1613,12 @@ class VAULTv2_5StreamingEngine:
                     "sin_q_flat": attn.rope_sin_q.reshape(64, 32).float().contiguous(),
                     "cos_k_flat": attn.rope_cos_k.reshape(128, 32).float().contiguous(),
                     "sin_k_flat": attn.rope_sin_k.reshape(128, 32).float().contiguous(),
-                    "local_bias_flat": attn._local_attn_bias.reshape(12, 64, 128).float().contiguous(),
+                    "local_bias_flat": attn._local_attn_bias.reshape(attn.n_q_heads, 64, 128).float().contiguous(),
                     "mlp_w12": mlp_w12,
                     "mlp_w3": mlp_w3,
+                    "alpha_ema": alpha_ema_l,
+                    "gamma_ema": 1.0 - alpha_ema_l,
+                    "log_gamma_ema": math.log1p(-alpha_ema_l),
                 }
             )
 
@@ -1547,10 +1767,8 @@ class VAULTv2_5StreamingEngine:
         k2_w = (prod_bf_10 * np_2).unsqueeze(2) * pack["w2_10"]                   # (B, 10, 1, 1)
 
         # Stationary EMA GTRM step constants (`expm1` avoids cancellation at small `t`, `0` FP64 ops on GPU!)
-        alpha_ema = float(model.ema_alpha)
-        gamma_ema = 1.0 - alpha_ema
-        log_gamma = math.log1p(-alpha_ema)
-        inv_ema_bc = (1.0 / (-torch.expm1(log_gamma * (t_f + 1.0))).clamp(min=1e-12)).view(1, 1, 1, 1)
+        prev_alpha_ema_l: Optional[float] = None
+        inv_ema_bc_l: Optional[torch.Tensor] = None
 
         inv_tau = 1.0 / max(0.18, 0.45 * (1.0 - 0.60 * step_ratio))
         inv_sqrt_d = 1.0 / math.sqrt(model.head_dim)
@@ -1895,9 +2113,9 @@ class VAULTv2_5StreamingEngine:
             ck_t = torch.cat([cell_k_raw[:, :n_keep_g], ck_ind_w], dim=1).squeeze(-1).contiguous()
             pq_t = phi_q.float().squeeze(2).contiguous()
 
-            if use_triton_gpu and shared_group_q and attn.heads_per_group == 3:
+            if use_triton_gpu and shared_group_q and attn.heads_per_group in (3, 6):
                 cq_t = cq_u.squeeze(-1).contiguous()
-                _vault_v2_decode_fw_kernel[(B * G,)](
+                _vault_v2_5_decode_fw_kernel[(B * G,)](
                     ls.S_state,
                     ls.occ_state,
                     phi_k_t,
@@ -1911,6 +2129,7 @@ class VAULTv2_5StreamingEngine:
                     OCC_ALPHA=occ_alpha_c,
                     D=D,
                     OUT_BF16=(dtype == torch.bfloat16),
+                    HEADS_PER_GROUP=attn.heads_per_group,
                     num_warps=4,
                 )
                 y_vault = y_vault_buf if dtype == comp_dt else y_vault_buf.to(dtype)
@@ -1966,7 +2185,7 @@ class VAULTv2_5StreamingEngine:
                         y_vault = (y_banks * w_norm.unsqueeze(-1)).sum(dim=2).unsqueeze(2).to(dtype)
 
             # 3. Fused Chunk-Local `64 x 128` RoPE Syntax Attention
-            if use_triton_gpu and attn.heads_per_group == 3 and G == 4:
+            if use_triton_gpu and attn.heads_per_group in (3, 6) and G == 4:
                 _vault_v2_5_local_syntax_decode_kernel[(B * G,)](
                     ls.local_k_win,
                     ls.local_v_win,
@@ -1981,6 +2200,7 @@ class VAULTv2_5StreamingEngine:
                     t_buf,
                     y_syn_buf,
                     OUT_BF16=(dtype == torch.bfloat16),
+                    HEADS_PER_GROUP=attn.heads_per_group,
                     num_warps=4,
                 )
                 y_syntax = y_syn_buf if dtype == comp_dt else y_syn_buf.to(dtype)
@@ -2006,9 +2226,15 @@ class VAULTv2_5StreamingEngine:
                 probs_loc = F.softmax(logits_loc, dim=-1).to(dtype).view(B, G, attn.heads_per_group, 2 * C)
                 y_syntax = torch.matmul(probs_loc, ls.local_v_win).view(B, attn.n_q_heads, 1, D)
 
-            # 4. O(1) Stationary Bias-Corrected Causal Leaky-EMA GTRM
-            ls.v_ema.mul_(gamma_ema).add_(v.float(), alpha=alpha_ema)
-            v_mean = (ls.v_ema * inv_ema_bc).to(dtype)
+            # 4. O(1) Stationary Bias-Corrected Causal Leaky-EMA GTRM (supports per-layer multi-timescale EMA)
+            alpha_ema_l = lp["alpha_ema"]
+            gamma_ema_l = lp["gamma_ema"]
+            if inv_ema_bc_l is None or alpha_ema_l != prev_alpha_ema_l:
+                log_gamma_l = lp["log_gamma_ema"]
+                inv_ema_bc_l = (1.0 / (-torch.expm1(log_gamma_l * (t_f + 1.0))).clamp(min=1e-12)).view(1, 1, 1, 1)
+                prev_alpha_ema_l = alpha_ema_l
+            ls.v_ema.mul_(gamma_ema_l).add_(v.float(), alpha=alpha_ema_l)
+            v_mean = (ls.v_ema * inv_ema_bc_l).to(dtype)
             v_macro = attn.gtrm_proj(v_mean).repeat_interleave(attn.heads_per_group, dim=1)
 
             y_keep = (
@@ -2126,6 +2352,7 @@ class VAULTv2_5StreamingEngine:
         occ_alpha: float = 0.5,
         use_cudagraph: bool = True,
         populate_decode_rings: bool = True,
+        disable_prior: bool = False,
     ) -> Tuple[torch.Tensor, VAULTv2_5StreamCache]:
         if model.training:
             model.eval()
@@ -2134,7 +2361,7 @@ class VAULTv2_5StreamingEngine:
         C = model.chunk_size
         assert segment_size >= C and segment_size % C == 0
         if cache is None:
-            cache = cls.init_cache(model, batch_size=B)
+            cache = cls.init_cache(model, batch_size=B, disable_prior=disable_prior)
 
         pos = 0
         if (cache.t_pos % C) != 0:

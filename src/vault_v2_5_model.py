@@ -19,8 +19,9 @@
 #   3. Shared-Prefix / Suffix Contrastive Choice-Margin Heads (`forward_mc_contrastive_loss` &
 #      `forward_wg_contrastive_loss`) for zero-leakage multiple-choice calibration during SFT.
 
+from contextlib import nullcontext
 import math
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import torch
 import torch.nn as nn
@@ -41,6 +42,25 @@ from src.vault_v2_model import (
 GTRM_EMA_ALPHA_DEFAULT: float = 1.0 / 2048.0  # Exact IEEE-754 power of two (2^-11)
 
 
+def build_geometric_ema_schedule(
+    n_layers: int,
+    alpha_fast: float = 2.0**-10,
+    alpha_slow: float = 2.0**-16,
+) -> Tuple[float, ...]:
+    """
+    Multi-timescale geometric GTRM Leaky-EMA schedule across depth (`layer 0 -> layer n_layers - 1`),
+    spanning local/paragraph horizons (`2^-10 = 1/1024`) down to ultra-long `64K+` horizons (`2^-16 = 1/65536`).
+    """
+    if n_layers <= 1:
+        return (float(alpha_fast),)
+    log_fast = math.log(float(alpha_fast))
+    log_slow = math.log(float(alpha_slow))
+    return tuple(
+        math.exp(log_fast + (log_slow - log_fast) * (i / float(n_layers - 1)))
+        for i in range(n_layers)
+    )
+
+
 def _vault_v2_5_cpu_chunkwise_autograd(
     phi_q: torch.Tensor,
     phi_k: torch.Tensor,
@@ -51,11 +71,15 @@ def _vault_v2_5_cpu_chunkwise_autograd(
     chunk_size: int = 64,
     v2_2_beta_occ: bool = True,
     prime_banks: Tuple[int, ...] = (47, 53, 59, 61),
-) -> torch.Tensor:
+    s_init: Optional[torch.Tensor] = None,
+    occ_init: Optional[torch.Tensor] = None,
+    return_final_state: bool = False,
+):
     """
     Pure-PyTorch autograd-compatible Compact-WY Co-Prime chunkwise scan for `CPU` unit tests & smoke runs
     (`CUDA_VISIBLE_DEVICES=""`), mathematically bit-exact to `flash_vault_v2_chunkwise` (`v2_1_consensus=True`,
-    `v2_2_beta_occ=True`). On GPU (`phi_q.is_cuda`), `VAULTv2_5Attention` dispatches directly to `flash_vault_v2_chunkwise`.
+    `v2_2_beta_occ=True`), including optional `s_init` (with exact `dS_init` autograd), `occ_init`, and
+    `return_final_state`. On GPU (`phi_q.is_cuda`), `VAULTv2_5Attention` dispatches to `flash_vault_v2_chunkwise`.
     """
     orig_dtype = v.dtype
     B, H, L_orig, D = phi_q.shape
@@ -71,8 +95,8 @@ def _vault_v2_5_cpu_chunkwise_autograd(
         phi_k = F.pad(phi_k, (0, 0, 0, pad_l))
         v = F.pad(v, (0, 0, 0, pad_l))
         beta = F.pad(beta, (0, pad_l), value=0.0)
-        cell_q = F.pad(cell_q, (0, pad_l), value=0)
-        cell_k = F.pad(cell_k, (0, pad_l), value=0)
+        cell_q = torch.cat([cell_q, cell_q[..., -1:].expand(-1, -1, -1, pad_l)], dim=-1)
+        cell_k = torch.cat([cell_k, cell_k[..., -1:].expand(-1, -1, -1, pad_l)], dim=-1)
 
     L = phi_q.size(2)
     M = L // C
@@ -94,8 +118,14 @@ def _vault_v2_5_cpu_chunkwise_autograd(
     b_h = torch.arange(B, device=dev)[:, None, None, None]
     g_for_h = (torch.arange(H, device=dev) // heads_per_group)[None, :, None, None]
 
-    S_state = torch.zeros((B, G, total_cells, D, D), device=dev, dtype=torch.float32)
-    occ_state = torch.zeros((B, G, total_cells), device=dev, dtype=torch.float32)
+    if s_init is not None:
+        S_state = s_init.float().expand(B, G, total_cells, D, D).clone()
+    else:
+        S_state = torch.zeros((B, G, total_cells, D, D), device=dev, dtype=torch.float32)
+    if occ_init is not None:
+        occ_state = occ_init.detach().float().expand(B, G, total_cells).clone()
+    else:
+        occ_state = torch.zeros((B, G, total_cells), device=dev, dtype=torch.float32)
     out_chunks = []
 
     for m in range(M):
@@ -152,7 +182,10 @@ def _vault_v2_5_cpu_chunkwise_autograd(
         )
 
     out = torch.cat(out_chunks, dim=2)
-    return out[:, :, :L_orig, :].to(orig_dtype)
+    out_trimmed = out[:, :, :L_orig, :].to(orig_dtype)
+    if return_final_state:
+        return out_trimmed, S_state.detach(), occ_state.detach()
+    return out_trimmed
 
 
 _EMA_KERNEL_CACHE: Dict[Tuple[torch.device, int, float, float], Tuple[torch.Tensor, torch.Tensor]] = {}
@@ -194,26 +227,33 @@ def _parallel_decay_scan_dim2(
     B, G, L, D = x_f.shape
     if L == 0:
         return x_f
-    if L <= block_len:
-        t_mat, _ = _get_ema_block_kernels(x_f.device, L, decay, step_scale)
-        return torch.matmul(t_mat, x_f)
+    amp_ctx = (
+        torch.amp.autocast(x_f.device.type, enabled=False)
+        if x_f.device.type in ("cuda", "cpu")
+        else nullcontext()
+    )
+    with amp_ctx:
+        x32 = x_f.float()
+        if L <= block_len:
+            t_mat, _ = _get_ema_block_kernels(x32.device, L, decay, step_scale)
+            return torch.matmul(t_mat, x32)
 
-    rem = L % block_len
-    pad_r = (block_len - rem) if rem != 0 else 0
-    xp = F.pad(x_f, (0, 0, 0, pad_r)) if pad_r > 0 else x_f
-    M = xp.size(2) // block_len
-    xb = xp.view(B, G, M, block_len, D)
+        rem = L % block_len
+        pad_r = (block_len - rem) if rem != 0 else 0
+        xp = F.pad(x32, (0, 0, 0, pad_r)) if pad_r > 0 else x32
+        M = xp.size(2) // block_len
+        xb = xp.view(B, G, M, block_len, D)
 
-    t_mat, d_vec = _get_ema_block_kernels(x_f.device, block_len, decay, step_scale)
-    u_loc = torch.matmul(t_mat, xb)  # (B, G, M, block_len, D)
-    if M > 1:
-        s_end = u_loc[:, :, :-1, -1, :]  # (B, G, M - 1, D)
-        chunk_decay = float(decay) ** block_len
-        e_prev = _parallel_decay_scan_dim2(s_end, decay=chunk_decay, step_scale=1.0, block_len=block_len)
-        carry = F.pad(e_prev, (0, 0, 1, 0)).unsqueeze(3)  # (B, G, M, 1, D)
-        u_loc = u_loc + carry * d_vec
-    out = u_loc.reshape(B, G, M * block_len, D)
-    return out[:, :, :L, :] if pad_r > 0 else out
+        t_mat, d_vec = _get_ema_block_kernels(x32.device, block_len, decay, step_scale)
+        u_loc = torch.matmul(t_mat, xb)  # (B, G, M, block_len, D)
+        if M > 1:
+            s_end = u_loc[:, :, :-1, -1, :]  # (B, G, M - 1, D)
+            chunk_decay = float(decay) ** block_len
+            e_prev = _parallel_decay_scan_dim2(s_end, decay=chunk_decay, step_scale=1.0, block_len=block_len)
+            carry = F.pad(e_prev, (0, 0, 1, 0)).unsqueeze(3)  # (B, G, M, 1, D)
+            u_loc = u_loc + carry * d_vec
+        out = u_loc.reshape(B, G, M * block_len, D)
+        return out[:, :, :L, :] if pad_r > 0 else out
 
 
 def compute_ema_bias_correction(
@@ -313,6 +353,7 @@ def compute_v2_5_shared_aux(
         "rep_pen": rep_pen,
         "nov4": nov4,
         "ema_bias_corr": ema_bias_corr,
+        "ema_bias_cache": {(L, float(ema_alpha)): ema_bias_corr},
     }
 
 
@@ -566,6 +607,7 @@ class VAULTv2_5Attention(nn.Module):
         layer_idx: int = 0,
         ckpt_interval: int = 8,
         ema_alpha: float = GTRM_EMA_ALPHA_DEFAULT,
+        use_cortical_prior: bool = False,
     ):
         super().__init__()
         assert n_q_heads % n_vault_groups == 0 and n_vault_groups >= 4
@@ -584,6 +626,14 @@ class VAULTv2_5Attention(nn.Module):
         self.v2_1_mode = True
         self.ckpt_interval = ckpt_interval
         self.ema_alpha = float(ema_alpha)
+        self.use_cortical_prior = bool(use_cortical_prior)
+        if self.use_cortical_prior:
+            self.s_prior = nn.Parameter(
+                torch.zeros(1, n_vault_groups, self.total_cells, head_dim, head_dim, dtype=torch.bfloat16),
+                requires_grad=False,
+            )
+        else:
+            self.register_parameter("s_prior", None)
 
         self.qk_group_anchor = nn.Linear(d_model, self.kv_dim, bias=False)
         self.q_proj = nn.Linear(d_model, n_q_heads * head_dim, bias=False)
@@ -686,6 +736,11 @@ class VAULTv2_5Attention(nn.Module):
         if mode or self.training:
             self._eval_w_cache = None
         return super().train(mode)
+
+    def get_occ_prior(self) -> Optional[torch.Tensor]:
+        if self.s_prior is None:
+            return None
+        return self.s_prior.detach().float().norm(dim=(-2, -1)).clamp(max=1.0)
 
     def _get_v2_5_packed_weights(self, x: torch.Tensor):
         d_m = self.d_model
@@ -878,6 +933,10 @@ class VAULTv2_5Attention(nn.Module):
         x0_norm: Optional[torch.Tensor] = None,
         return_ent_div: bool = False,
         cms_aux=None,
+        s_init: Optional[torch.Tensor] = None,
+        occ_init: Optional[torch.Tensor] = None,
+        state_slot: Optional[list] = None,
+        disable_prior: bool = False,
     ):
         B, L, d_m = x.shape
         ent_div_aux = torch.zeros((), device=x.device, dtype=torch.float32)
@@ -935,7 +994,17 @@ class VAULTv2_5Attention(nn.Module):
 
         x0_iso = sh["x0_iso"]
         nov4 = sh["nov4"]
-        ema_bias_corr = sh["ema_bias_corr"]
+        ema_cache = sh.get("ema_bias_cache")
+        if isinstance(ema_cache, dict):
+            cache_key = (L, float(self.ema_alpha))
+            ema_bias_corr = ema_cache.get(cache_key)
+            if ema_bias_corr is None:
+                ema_bias_corr = compute_ema_bias_correction(L, x.device, alpha=self.ema_alpha, start_pos=0)
+                ema_cache[cache_key] = ema_bias_corr
+        else:
+            ema_bias_corr = sh.get("ema_bias_corr")
+            if ema_bias_corr is None or ema_bias_corr.size(2) != L or float(self.ema_alpha) != GTRM_EMA_ALPHA_DEFAULT:
+                ema_bias_corr = compute_ema_bias_correction(L, x.device, alpha=self.ema_alpha, start_pos=0)
 
         # 2. Fused single-GEMM `x0_iso` projection across SalienceEntityBinderV2_5 + Induction Q/V/Beta
         sb = self.salience_binder
@@ -1161,8 +1230,19 @@ class VAULTv2_5Attention(nn.Module):
         cell_k = torch.cat([cell_k[:, :n_keep_g], ck_ind_w], dim=1)
         del pk_keep, pk_ind_w, v_keep_w, v_ind_w, beta_keep_f, beta_ind_f, ck_ind_w
 
+        if s_init is not None:
+            s_eff = s_init
+            occ_eff = occ_init
+        elif (not disable_prior) and (self.s_prior is not None):
+            s_eff = self.s_prior
+            occ_eff = occ_init if occ_init is not None else self.get_occ_prior()
+        else:
+            s_eff = None
+            occ_eff = None
+        want_final = (state_slot is not None) and (len(state_slot) == 0)
+
         if phi_q.is_cuda:
-            y_vault = flash_vault_v2_chunkwise(
+            vault_res = flash_vault_v2_chunkwise(
                 phi_q,
                 phi_k,
                 v_vault,
@@ -1175,9 +1255,12 @@ class VAULTv2_5Attention(nn.Module):
                 v2_2_beta_occ=True,
                 prime_banks=self.prime_banks,
                 shared_group_cell_q=shared_group_q,
+                s_init=s_eff,
+                occ_init=occ_eff,
+                return_final_state=want_final,
             )
         else:
-            y_vault = _vault_v2_5_cpu_chunkwise_autograd(
+            vault_res = _vault_v2_5_cpu_chunkwise_autograd(
                 phi_q,
                 phi_k,
                 v_vault,
@@ -1187,8 +1270,16 @@ class VAULTv2_5Attention(nn.Module):
                 chunk_size=self.chunk_size,
                 v2_2_beta_occ=True,
                 prime_banks=self.prime_banks,
+                s_init=s_eff,
+                occ_init=occ_eff,
+                return_final_state=want_final,
             )
-        del phi_q, phi_k, v_vault, beta_write, cell_q, cell_k
+        if want_final:
+            y_vault, s_fin, occ_fin = vault_res
+            state_slot.append((s_fin.to(torch.bfloat16), occ_fin))
+        else:
+            y_vault = vault_res
+        del phi_q, phi_k, v_vault, beta_write, cell_q, cell_k, vault_res
 
         # 3. O(L) Chunk-Local RoPE + Multi-Scale Decay Syntax Branch
         y_syntax = self._chunk_local_rope_syntax(q_norm, k_norm, v)
@@ -1250,6 +1341,7 @@ class VAULTv2_5Block(nn.Module):
         ckpt_interval: int = 8,
         prime_banks: Tuple[int, ...] = (47, 53, 59, 61),
         ema_alpha: float = GTRM_EMA_ALPHA_DEFAULT,
+        use_cortical_prior: bool = False,
     ):
         super().__init__()
         self.norm1 = RMSNorm(d_model)
@@ -1263,6 +1355,7 @@ class VAULTv2_5Block(nn.Module):
             layer_idx=layer_idx,
             ckpt_interval=ckpt_interval,
             ema_alpha=ema_alpha,
+            use_cortical_prior=use_cortical_prior,
         )
         self.norm2 = RMSNorm(d_model)
         self.mlp = SwiGLUMLP(d_model=d_model, d_ff=d_ff)
@@ -1273,8 +1366,21 @@ class VAULTv2_5Block(nn.Module):
         step_ratio: float = 1.0,
         x0_norm: Optional[torch.Tensor] = None,
         cms_aux=None,
+        s_init: Optional[torch.Tensor] = None,
+        occ_init: Optional[torch.Tensor] = None,
+        state_slot: Optional[list] = None,
+        disable_prior: bool = False,
     ) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x), step_ratio=step_ratio, x0_norm=x0_norm, cms_aux=cms_aux)
+        x = x + self.attn(
+            self.norm1(x),
+            step_ratio=step_ratio,
+            x0_norm=x0_norm,
+            cms_aux=cms_aux,
+            s_init=s_init,
+            occ_init=occ_init,
+            state_slot=state_slot,
+            disable_prior=disable_prior,
+        )
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -1285,6 +1391,10 @@ class VAULTv2_5Block(nn.Module):
         x0_norm: Optional[torch.Tensor] = None,
         return_ent_div: bool = False,
         cms_aux=None,
+        s_init: Optional[torch.Tensor] = None,
+        occ_init: Optional[torch.Tensor] = None,
+        state_slot: Optional[list] = None,
+        disable_prior: bool = False,
     ):
         if return_ent_div:
             attn_out, beta_mean, ent_div = self.attn(
@@ -1294,12 +1404,24 @@ class VAULTv2_5Block(nn.Module):
                 x0_norm=x0_norm,
                 return_ent_div=True,
                 cms_aux=cms_aux,
+                s_init=s_init,
+                occ_init=occ_init,
+                state_slot=state_slot,
+                disable_prior=disable_prior,
             )
             x = x + attn_out
             x = x + self.mlp(self.norm2(x))
             return x, beta_mean, ent_div
         attn_out, beta_mean = self.attn(
-            self.norm1(x), step_ratio=step_ratio, return_beta_mean=True, x0_norm=x0_norm, cms_aux=cms_aux
+            self.norm1(x),
+            step_ratio=step_ratio,
+            return_beta_mean=True,
+            x0_norm=x0_norm,
+            cms_aux=cms_aux,
+            s_init=s_init,
+            occ_init=occ_init,
+            state_slot=state_slot,
+            disable_prior=disable_prior,
         )
         x = x + attn_out
         x = x + self.mlp(self.norm2(x))
@@ -1308,8 +1430,9 @@ class VAULTv2_5Block(nn.Module):
 
 class VAULTLMv2_5(nn.Module):
     """
-    VAULTLM-v2.5 (~180.6M Parameters):
-      - Stationary Causal Leaky-EMA GTRM (`alpha = 2^-11`, invariant across `2K -> 128K+`)
+    VAULTLM-v2.5 (`180.6M` to `1.03B+` Parameters):
+      - Stationary Causal Leaky-EMA GTRM (`alpha = 2^-11` or per-layer multi-timescale `ema_alpha_schedule`)
+      - Optional Persistent Cortical Prior Vaults (`use_cortical_prior=True`, sparse Voronoi-routed `s_prior`)
       - Tri-Horizon `1..11`-BPE-Subword `SalienceEntityBinderV2_5` (`Vault Group 3` extended sibling channel)
       - Lossless Step-0 checkpoint inheritance from `VAULT v2.4` + zero-shot Co-Prime Voronoi Mitosis
         (`220 -> 508 -> 942 -> 2,002` cells).
@@ -1329,6 +1452,8 @@ class VAULTLMv2_5(nn.Module):
         ckpt_interval: Optional[int] = None,
         prime_banks: Tuple[int, ...] = (47, 53, 59, 61),
         ema_alpha: float = GTRM_EMA_ALPHA_DEFAULT,
+        ema_alpha_schedule: Optional[Sequence[float]] = None,
+        use_cortical_prior: bool = False,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -1346,6 +1471,14 @@ class VAULTLMv2_5(nn.Module):
         self.prime_banks = tuple(int(p) for p in prime_banks)
         self.ckpt_interval = ckpt_interval if ckpt_interval is not None else 8
         self.ema_alpha = float(ema_alpha)
+        if ema_alpha_schedule is not None:
+            assert len(ema_alpha_schedule) == n_layers, (
+                f"Expected ema_alpha_schedule of length {n_layers}, got {len(ema_alpha_schedule)}"
+            )
+            self.ema_alpha_schedule = tuple(float(a) for a in ema_alpha_schedule)
+        else:
+            self.ema_alpha_schedule = tuple(float(ema_alpha) for _ in range(n_layers))
+        self.use_cortical_prior = bool(use_cortical_prior)
 
         self.embed_tokens = nn.Embedding(vocab_size, d_model)
         nn.init.normal_(self.embed_tokens.weight, mean=0.0, std=0.02)
@@ -1363,7 +1496,8 @@ class VAULTLMv2_5(nn.Module):
                     layer_idx=i,
                     ckpt_interval=self.ckpt_interval,
                     prime_banks=self.prime_banks,
-                    ema_alpha=self.ema_alpha,
+                    ema_alpha=self.ema_alpha_schedule[i],
+                    use_cortical_prior=self.use_cortical_prior,
                 )
                 for i in range(n_layers)
             ]
@@ -1377,24 +1511,59 @@ class VAULTLMv2_5(nn.Module):
             nn.init.normal_(blk.attn.o_proj.weight, mean=0.0, std=res_std)
             nn.init.normal_(blk.mlp.w3.weight, mean=0.0, std=res_std)
 
-    def count_parameters(self) -> int:
+    def train(self, mode: bool = True):
+        if mode or self.training:
+            if hasattr(self, "_decode_static_pack_v2_5"):
+                self._decode_static_pack_v2_5 = None
+            runners = getattr(self, "_decode_graph_runners_v2_5", None)
+            if runners:
+                banks = self.layers[0].attn.salience_binder.BANKS
+                for r in list(runners.values()):
+                    if hasattr(r, "release_owner"):
+                        r.release_owner(banks)
+                runners.clear()
+            self._decode_graph_runners_v2_5 = None
+        return super().train(mode)
+
+    def count_parameters(self, trainable_only: bool = False) -> int:
+        if trainable_only:
+            return sum(p.numel() for p in self.parameters() if p.requires_grad)
         return sum(p.numel() for p in self.parameters())
+
+    def count_prior_parameters(self) -> int:
+        return sum(
+            blk.attn.s_prior.numel()
+            for blk in self.layers
+            if blk.attn.s_prior is not None
+        )
+
+    def count_dense_parameters(self) -> int:
+        return self.count_parameters(trainable_only=False) - self.count_prior_parameters()
 
     def compute_x0_norm(self, x: torch.Tensor) -> torch.Tensor:
         return self.x0_rms_norm(x.detach())
 
     def compute_cms_aux(self, x0_norm: torch.Tensor):
         b0 = self.layers[0].attn.salience_binder
-        return compute_v2_5_shared_aux(x0_norm, b0, ema_alpha=self.ema_alpha)
+        return compute_v2_5_shared_aux(x0_norm, b0, ema_alpha=self.ema_alpha_schedule[0])
 
     def _encode_hidden_with_aux(
-        self, input_ids: torch.Tensor, step_ratio: float = 1.0, return_ent_div: bool = False
+        self,
+        input_ids: torch.Tensor,
+        step_ratio: float = 1.0,
+        return_ent_div: bool = False,
+        s_inits: Optional[Sequence[Optional[torch.Tensor]]] = None,
+        occ_inits: Optional[Sequence[Optional[torch.Tensor]]] = None,
+        return_final_states: bool = False,
+        disable_prior: bool = False,
     ):
         x = self.embed_tokens(input_ids)
         if x.is_cuda and torch.is_autocast_enabled("cuda"):
             x = x.to(torch.get_autocast_dtype("cuda"))
         x0_norm = self.compute_x0_norm(x)
         cms_aux = self.compute_cms_aux(x0_norm)
+
+        state_slots: Optional[List[list]] = [[] for _ in range(len(self.layers))] if return_final_states else None
 
         beta_acc = torch.zeros((), device=x.device, dtype=torch.float32)
         ent_div_acc = torch.zeros((), device=x.device, dtype=torch.float32)
@@ -1411,34 +1580,102 @@ class VAULTLMv2_5(nn.Module):
                     use_ckpt = idx % 4 != 3
                 else:
                     use_ckpt = True
+
+            s_in_l = s_inits[idx] if s_inits is not None else None
+            occ_in_l = occ_inits[idx] if occ_inits is not None else None
+            slot_l = state_slots[idx] if state_slots is not None else None
+
             if return_ent_div:
                 if use_ckpt:
                     x, b_m, e_d = torch.utils.checkpoint.checkpoint(
-                        layer.forward_with_aux, x, step_ratio, x0_norm, True, cms_aux, use_reentrant=False
+                        layer.forward_with_aux,
+                        x,
+                        step_ratio,
+                        x0_norm,
+                        True,
+                        cms_aux,
+                        s_in_l,
+                        occ_in_l,
+                        slot_l,
+                        disable_prior,
+                        use_reentrant=False,
                     )
                 else:
                     x, b_m, e_d = layer.forward_with_aux(
-                        x, step_ratio=step_ratio, x0_norm=x0_norm, return_ent_div=True, cms_aux=cms_aux
+                        x,
+                        step_ratio=step_ratio,
+                        x0_norm=x0_norm,
+                        return_ent_div=True,
+                        cms_aux=cms_aux,
+                        s_init=s_in_l,
+                        occ_init=occ_in_l,
+                        state_slot=slot_l,
+                        disable_prior=disable_prior,
                     )
                 ent_div_acc = ent_div_acc + e_d
             else:
                 if use_ckpt:
                     x, b_m = torch.utils.checkpoint.checkpoint(
-                        layer.forward_with_aux, x, step_ratio, x0_norm, False, cms_aux, use_reentrant=False
+                        layer.forward_with_aux,
+                        x,
+                        step_ratio,
+                        x0_norm,
+                        False,
+                        cms_aux,
+                        s_in_l,
+                        occ_in_l,
+                        slot_l,
+                        disable_prior,
+                        use_reentrant=False,
                     )
                 else:
-                    x, b_m = layer.forward_with_aux(x, step_ratio=step_ratio, x0_norm=x0_norm, cms_aux=cms_aux)
+                    x, b_m = layer.forward_with_aux(
+                        x,
+                        step_ratio=step_ratio,
+                        x0_norm=x0_norm,
+                        cms_aux=cms_aux,
+                        s_init=s_in_l,
+                        occ_init=occ_in_l,
+                        state_slot=slot_l,
+                        disable_prior=disable_prior,
+                    )
             beta_acc = beta_acc + b_m
         inv_l = 1.0 / float(len(self.layers))
+        h_out = self.norm_f(x)
+        if return_final_states:
+            final_states = [slot[0] for slot in state_slots]
+            if return_ent_div:
+                return h_out, beta_acc * inv_l, ent_div_acc * inv_l, final_states
+            return h_out, beta_acc * inv_l, final_states
         if return_ent_div:
-            return self.norm_f(x), beta_acc * inv_l, ent_div_acc * inv_l
-        return self.norm_f(x), beta_acc * inv_l
+            return h_out, beta_acc * inv_l, ent_div_acc * inv_l
+        return h_out, beta_acc * inv_l
 
-    def _encode_hidden(self, input_ids: torch.Tensor, step_ratio: float = 1.0) -> torch.Tensor:
-        return self._encode_hidden_with_aux(input_ids, step_ratio=step_ratio)[0]
+    def _encode_hidden(
+        self,
+        input_ids: torch.Tensor,
+        step_ratio: float = 1.0,
+        s_inits: Optional[Sequence[Optional[torch.Tensor]]] = None,
+        occ_inits: Optional[Sequence[Optional[torch.Tensor]]] = None,
+        disable_prior: bool = False,
+    ) -> torch.Tensor:
+        return self._encode_hidden_with_aux(
+            input_ids,
+            step_ratio=step_ratio,
+            s_inits=s_inits,
+            occ_inits=occ_inits,
+            disable_prior=disable_prior,
+        )[0]
 
-    def forward(self, input_ids: torch.Tensor, step_ratio: float = 1.0) -> torch.Tensor:
-        return self.lm_head(self._encode_hidden(input_ids, step_ratio=step_ratio))
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        step_ratio: float = 1.0,
+        disable_prior: bool = False,
+    ) -> torch.Tensor:
+        return self.lm_head(
+            self._encode_hidden(input_ids, step_ratio=step_ratio, disable_prior=disable_prior)
+        )
 
     def forward_loss(
         self,
@@ -1449,14 +1686,34 @@ class VAULTLMv2_5(nn.Module):
         logit_chunk_tokens: int = 2048,
         return_beta_mean: bool = False,
         return_ent_div: bool = False,
+        s_inits: Optional[Sequence[Optional[torch.Tensor]]] = None,
+        occ_inits: Optional[Sequence[Optional[torch.Tensor]]] = None,
+        return_final_states: bool = False,
+        disable_prior: bool = False,
     ):
-        if return_ent_div:
-            h_raw, beta_mean, ent_div_mean = self._encode_hidden_with_aux(
-                input_ids, step_ratio=step_ratio, return_ent_div=True
-            )
+        enc_res = self._encode_hidden_with_aux(
+            input_ids,
+            step_ratio=step_ratio,
+            return_ent_div=return_ent_div,
+            s_inits=s_inits,
+            occ_inits=occ_inits,
+            return_final_states=return_final_states,
+            disable_prior=disable_prior,
+        )
+        if return_final_states:
+            if return_ent_div:
+                h_raw, beta_mean, ent_div_mean, final_states = enc_res
+            else:
+                h_raw, beta_mean, final_states = enc_res
+                ent_div_mean = torch.zeros((), device=h_raw.device, dtype=torch.float32)
         else:
-            h_raw, beta_mean = self._encode_hidden_with_aux(input_ids, step_ratio=step_ratio)
-            ent_div_mean = torch.zeros((), device=h_raw.device, dtype=torch.float32)
+            final_states = None
+            if return_ent_div:
+                h_raw, beta_mean, ent_div_mean = enc_res
+            else:
+                h_raw, beta_mean = enc_res
+                ent_div_mean = torch.zeros((), device=h_raw.device, dtype=torch.float32)
+
         h = h_raw.reshape(-1, self.d_model)
         t_flat = targets.reshape(-1)
         w_flat = loss_weights.reshape(-1) if loss_weights is not None else None
@@ -1488,11 +1745,82 @@ class VAULTLMv2_5(nn.Module):
                 total_loss = total_loss + _chunk_loss_sum(hs, ts, ws)
 
         ce_loss = total_loss / denom
+        if return_final_states:
+            if return_beta_mean and return_ent_div:
+                return ce_loss, beta_mean, ent_div_mean, final_states
+            if return_beta_mean:
+                return ce_loss, beta_mean, final_states
+            return ce_loss, final_states
         if return_beta_mean and return_ent_div:
             return ce_loss, beta_mean, ent_div_mean
         if return_beta_mean:
             return ce_loss, beta_mean
         return ce_loss
+
+    def forward_sleep_kl_loss(
+        self,
+        input_ids: torch.Tensor,
+        targets: torch.Tensor,
+        h_teacher: torch.Tensor,
+        step_ratio: float = 1.0,
+        logit_chunk_tokens: int = 1024,
+        kl_weight: float = 0.35,
+        ce_weight: float = 1.0,
+        temperature: float = 1.5,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Zero-ghost-weight Hippocampal-to-Cortical Sleep Consolidation objective:
+        Distills a detached Teacher hidden representation `h_teacher` (computed with live `S_stream + s_prior`)
+        into the blank-vault Student (`S = 0`, `disable_prior=True`) via chunked vocabulary CE + KL divergence
+        without materializing full-sequence `(B*L, V)` logits in VRAM.
+        Returns `(total_loss, ce_loss_detached, kl_loss_detached)`.
+        """
+        h_stu_raw, _ = self._encode_hidden_with_aux(
+            input_ids, step_ratio=step_ratio, disable_prior=True
+        )
+        h_stu = h_stu_raw.reshape(-1, self.d_model)
+        h_tea = h_teacher.detach().reshape(-1, self.d_model)
+        t_flat = targets.reshape(-1)
+        n_tok = h_stu.size(0)
+        denom = (t_flat != -100).float().sum().clamp(min=1.0)
+        inv_t = 1.0 / float(temperature)
+        t_sq = float(temperature) * float(temperature)
+
+        def _chunk_ce_kl_sums(
+            hs: torch.Tensor, ht: torch.Tensor, ts: torch.Tensor
+        ) -> Tuple[torch.Tensor, torch.Tensor]:
+            z_stu = self.lm_head(hs).float()
+            ce_s = F.cross_entropy(z_stu, ts, ignore_index=-100, reduction="sum")
+            with torch.no_grad():
+                z_tea = self.lm_head(ht).float()
+                p_tea = F.softmax(z_tea * inv_t, dim=-1)
+                del z_tea
+            log_p_stu = F.log_softmax(z_stu * inv_t, dim=-1)
+            kl_tok = F.kl_div(log_p_stu, p_tea, reduction="none").sum(dim=-1)
+            valid = ts != -100
+            kl_s = torch.where(valid, kl_tok, torch.zeros_like(kl_tok)).sum() * t_sq
+            return ce_s, kl_s
+
+        ce_total = torch.zeros((), device=h_stu.device, dtype=torch.float32)
+        kl_total = torch.zeros((), device=h_stu.device, dtype=torch.float32)
+        for start in range(0, n_tok, logit_chunk_tokens):
+            end = min(start + logit_chunk_tokens, n_tok)
+            hs = h_stu[start:end]
+            ht = h_tea[start:end]
+            ts = t_flat[start:end]
+            if self.training and torch.is_grad_enabled() and n_tok > logit_chunk_tokens:
+                ce_c, kl_c = torch.utils.checkpoint.checkpoint(
+                    _chunk_ce_kl_sums, hs, ht, ts, use_reentrant=False
+                )
+            else:
+                ce_c, kl_c = _chunk_ce_kl_sums(hs, ht, ts)
+            ce_total = ce_total + ce_c
+            kl_total = kl_total + kl_c
+
+        ce_loss = ce_total / denom
+        kl_loss = kl_total / denom
+        total_loss = float(ce_weight) * ce_loss + float(kl_weight) * kl_loss
+        return total_loss, ce_loss.detach(), kl_loss.detach()
 
     def forward_mc_contrastive_loss(
         self,
@@ -1640,7 +1968,7 @@ def load_v2_4_into_v2_5(
     clean_sd = _unwrap_checkpoint_state_dict(v2_4_state)
 
     incompatible = model_v2_5.load_state_dict(clean_sd, strict=False)
-    allowed_missing = {"ind_shared_proj_g2", "ext_span_alpha"}
+    allowed_missing = {"ind_shared_proj_g2", "ext_span_alpha", "s_prior"}
     unexpected_missing = [
         k for k in incompatible.missing_keys if not any(k.endswith("." + s) for s in allowed_missing)
     ]
@@ -1672,7 +2000,7 @@ def upgrade_v2_5_to_wider_primes(
     """
     Zero-Shot Voronoi Cell Mitosis for `VAULTLMv2_5` (`220 -> 508 -> 942 -> 2,002` cells):
     Identical simplex-cone daughter splitting and uniform `k_nz = 52` ternary L1 equalization as `v2.3/v2.4`,
-    preserving `ind_shared_proj_g2` and `ext_span_alpha` across all 16 layers.
+    preserving `ind_shared_proj_g2`, `ext_span_alpha`, and daughter-inherited `s_prior` across all layers.
     """
     v2_5_sd = _unwrap_checkpoint_state_dict(src_state)
 
@@ -1693,7 +2021,11 @@ def upgrade_v2_5_to_wider_primes(
             new_sd[k] = dst_t.clone()
             continue
         if k not in v2_5_sd:
-            if k.endswith(".ind_shared_proj_g2") or k.endswith(".ext_span_alpha"):
+            if (
+                k.endswith(".ind_shared_proj_g2")
+                or k.endswith(".ext_span_alpha")
+                or k.endswith(".attn.s_prior")
+            ):
                 new_sd[k] = dst_t.clone()
                 continue
             raise KeyError(f"Missing expected v2.5 checkpoint key during mitosis: {k}")
@@ -1701,6 +2033,24 @@ def upgrade_v2_5_to_wider_primes(
         if src_t.shape == dst_t.shape:
             new_sd[k] = src_t.to(device=dst_t.device, dtype=dst_t.dtype)
             copied_exact += 1
+            continue
+
+        if k.endswith(".attn.s_prior"):
+            assert src_t.shape[2] == old_total and dst_t.shape[2] == new_total
+            prior_slices = []
+            off_old = 0
+            for p_old, p_new in zip(old_primes, new_primes):
+                base_m = p_new // p_old
+                rem_m = p_new % p_old
+                assert base_m >= 1
+                for c_idx in range(p_old):
+                    m_c = base_m + (1 if c_idx < rem_m else 0)
+                    parent_slice = src_t[:, :, off_old + c_idx : off_old + c_idx + 1, :, :]
+                    prior_slices.append(parent_slice.expand(-1, -1, m_c, -1, -1))
+                off_old += p_old
+            s_new = torch.cat(prior_slices, dim=2).contiguous()
+            assert s_new.shape == dst_t.shape
+            new_sd[k] = s_new.to(device=dst_t.device, dtype=dst_t.dtype)
             continue
 
         if not k.endswith(".attn.kenyon_proj.weight"):

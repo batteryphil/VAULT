@@ -1,298 +1,129 @@
-# VAULT: Variance-Weighted Associative Unitary Lattice Tensor
-### `VAULT v2.5` (`180.6M` Co-Prime Kenyon Cell LM & Zero-`rocFFT` $\mathcal{O}(1)$ Streaming Engine) — Post-Transformer, Post-SSM Sequence Modeling
-
-**Author & Architect:** Philip Bartsch ([`@batteryphil`](https://github.com/batteryphil))  
-**Pretrained & SFT Weights (HuggingFace Hub):** [**`batteryphil/VAULT-v2.5-180M`**](https://huggingface.co/batteryphil/VAULT-v2.5-180M)  
-**License:** Dual License — [**GNU AGPL-3.0**](LICENSE-AGPL-3.0) (Free / Non-Profit / Open-Source) **or** [**Commercial License**](LICENSE-COMMERCIAL.md) (Closed-Source Business Use) · `Copyright (c) 2026 Philip Bartsch`
-
+---
+license: other
+license_name: vault-dual-agpl-3.0-or-commercial
+license_link: LICENSE
+base_model: Qwen/Qwen2.5-1.5B-Instruct
+base_model_relation: adapter
+language:
+  - en
+  - fr
+pipeline_tag: text-generation
+tags:
+  - vault
+  - sliding-window-attention
+  - associative-memory
+  - cpu-inference
+  - freestanding-c
+  - bare-metal
+  - quantized
+  - q8_0
+  - q4_0
 ---
 
-## ⚡ Download & Run in 30 Seconds
+# VAULT v3 — 1.54B (Qwen2.5-1.5B-Instruct + Block Sliding-Window + Kenyon Vault + Segment Memory v2)
 
-### Option A — 5 Lines of Python (`transformers`, Zero Repo Clone Needed)
-```bash
-pip install torch transformers safetensors huggingface_hub
-# Optional on Linux CUDA / ROCm for 48.8 tok/s hardware-fused O(1) Triton kernels:
-# pip install triton
-```
+VAULT v3 is a deployment-oriented rework of VAULT, designed for **CPU-only and freestanding x86_64 (`-ffreestanding -nostdlib`, no libc, no heap)** inference. It addresses the review of VAULT v2.5 (irregular 981-tensor architecture, FP32-only Safetensors, JSON metadata, tokenizer artifacts, 180M capacity, no portable runtime).
 
-```python
-from transformers import AutoModelForCausalLM, AutoTokenizer
+| | VAULT v2.5 (180M) | **VAULT v3 (1.54B)** |
+|---|---|---|
+| Architecture | Custom (Salience Binder, FFT bind, CMS, GTRM) | Standard GQA Transformer (RMSNorm, RoPE, SwiGLU) + block sliding window ($W=1024$, active $2W=2048$) + Kenyon Vault + `SegmentScorer v2` |
+| Tensors | 981 (~62/layer) | **485** (3 global + 6 `SegmentScorer v2` + 28 × 17/layer) |
+| Weights shipped | FP32 Safetensors, 956.7 MB | **BF16 / Q8_0 / Hybrid Q4_0** in flat `VLT3` binary |
+| Metadata | 104 KB JSON header | Fixed 4,096 B C header, 128 B directory entries, 64 B alignment, CRC32 + SIMD scale integrity scan |
+| Tokenizer | SmolLM 49K (`<jupyter_code>`, `<gh_stars>`, …) | Qwen2.5 ChatML byte-level BPE (151,665) + UAX #15 NFC + dynamic >32 KB arena (`VTOK`) |
+| Inference state | framework-dependent | **Fixed $O(1)$ arena at any context length (552.9 MB C FP32 / 3.83 GiB GPU BF16 @ 100K), zero `malloc`** |
+| Runtime | PyTorch only | **Freestanding C99 runtime (`-ffreestanding -nostdlib`, `<2 KB` stack frames, `0` external symbols)** + AVX2/FMA |
 
-tok = AutoTokenizer.from_pretrained("batteryphil/VAULT-v2.5-180M", trust_remote_code=True)
-model = AutoModelForCausalLM.from_pretrained(
-    "batteryphil/VAULT-v2.5-180M", trust_remote_code=True
-).to("cuda" if __import__("torch").cuda.is_available() else "cpu")
+## What is in this repository
 
-print(model.chat(tok, "Explain why recursion needs a base case in programming.", stream=True))
-```
+| File | Size | Description |
+|---|---|---|
+| `vault_v3_1.5b_bf16.vlt3` | 3,104.3 MB | BF16 master weights (Kenyon Vault & `SegmentScorer v2` in F32; hosted on [Hugging Face](https://huggingface.co/batteryphil/VAULT-v3-1.5B)) |
+| `vault_v3_1.5b_q8_0.vlt3` | 1,657.2 MB | 8-bit blocks (32 weights + fp16 scale = 34 B; hosted on [Hugging Face](https://huggingface.co/batteryphil/VAULT-v3-1.5B)) |
+| `vault_v3_1.5b_q4_0.vlt3` | 1,022.5 MB | Hybrid 4-bit blocks (clipped-MSE `Q4_0` + `Q8_0` embeddings, layers `0, 1, 26, 27` `q_proj`/`o_proj`, and all `k_proj`/`v_proj`; hosted on [Hugging Face](https://huggingface.co/batteryphil/VAULT-v3-1.5B)) |
+| `vault_params/vault_v3_stage_a_best.pt` | 7.7 MB | Trained Kenyon Vault Stage-A tensors (PyTorch) |
+| `vault_params/vault_v3_seg_scorer.pt` | 4.8 MB | Trained `SegmentScorer v2` MLP tensors (PyTorch; combine with Qwen2.5-1.5B-Instruct via `tools/export_vlt3.py`) |
+| `runtime/` | — | `vault3.h`, `vault3.c` (`vault3_nfc_tables.h`, freestanding core), `vault3_host.c` (POSIX CLI / bench), `Makefile` |
+| `src/vault_v3_model.py` | — | PyTorch reference model (`forward == prefill+step == step == C99`, max `|Δlogit| ≤ 3.5e-5`, `100%` top-1 agreement) |
+| `tools/` | — | `VLT3` reader/writer, clipped-MSE hybrid quantizer, exporter |
+| `tests/` | — | 4-way Python↔C parity, UAX #15 NFC & >32 KB BPE parity, corrupt/NaN rejection, `CAAIGovernor` tests |
+| `docs/VAULT_v3_SPEC.md` | — | Full math, tensor table, byte-exact `VLT3`/`VTOK` layout, bare-metal porting guide |
+| `benchmarks/` | — | Raw JSON results and evaluation harnesses |
 
-**Zero-Shot Elastic Co-Prime Mitosis (`220 -> 2,002` Kenyon Cells in 1 Line):**
-Expand associative fast-weight capacity **9.1x** (`8.97M -> 62.7B` Chinese Remainder Theorem addresses) at inference time for `32K+` streaming retrieval with **zero change in per-token decode latency (`20.59 ms/tok`)**:
-```python
-model_2002c = model.expand_mitosis(2002)  # Presets: 220, 508, 942, 2002
-reply, stats = model_2002c.chat(
-    tok,
-    "[python] Write a Python function to find the maximum element and sum of a list of numbers.",
-    return_stats=True,
-)
-print(reply, "\n", stats)
-```
-
-### Option B — 1-Command CLI & Interactive Streaming REPL
-`run_vault.py` automatically downloads weights from [`batteryphil/VAULT-v2.5-180M`](https://huggingface.co/batteryphil/VAULT-v2.5-180M) if local `./checkpoints/` are not present, and falls back gracefully to pure PyTorch on macOS / Windows / CPU:
-```bash
-git clone https://github.com/batteryphil/VAULT.git
-cd VAULT
-pip install -r requirements.txt
-
-# 1. Run the 4-domain live streaming showcase (Python, CS prose, <think> CoT, 8-subsystem NIAH):
-python run_vault.py --demo
-
-# 2. Interactive streaming Chat REPL (supports /mitosis 2002, /demo, /temp <float>):
-python run_vault.py
-
-# 3. Single prompt (or Pre-SFT base model via --variant base --raw):
-python run_vault.py --cells 2002 --prompt "Write a C++20 RAII file descriptor wrapper."
-```
-
-### 💻 Cross-Vendor Hardware Support (`NVIDIA CUDA` • `AMD ROCm` • `Apple Silicon` • `CPU`)
-* **NVIDIA CUDA GPUs (`Ampere` RTX 30xx / A100, `Ada` RTX 40xx / L4, `Hopper` H100, `Blackwell` RTX 50xx):** Full native acceleration via vendor-neutral **Triton PTX TensorCore** chunkwise prefill (`tile_p <= 64`, `<= 32 KB` shared memory across all `220c..2,002c` Mitosis presets), fused register-DFT Triton decode kernels, and `torch.cuda.CUDAGraph`.
-* **Pre-Ampere NVIDIA GPUs (`Turing` Colab T4 / RTX 20xx, `Volta` V100):** Automatic `FP32` Triton / `FP16` fallback when hardware `bfloat16` TensorCores (`SM < 8.0`) are unavailable.
-* **AMD ROCm GPUs (`RDNA3` / `RDNA4` / `CDNA`):** Full native Triton `BF16` WMMA + HIPGraph acceleration.
-* **Apple Silicon (`mps`) & `CPU`:** Zero-dependency vectorized Compact-WY PyTorch fallback (`run_vault.py` auto-detects `cuda` $\rightarrow$ `mps` $\rightarrow$ `cpu`).
-
----
-
-## 🏆 `VAULT v2.5` (`180.6M`) — Architecture, $\mathcal{O}(1)$ Streaming & Empirical Benchmarks
-
-Trained from scratch on a **single consumer 16 GB GPU** (`AMD Radeon RX 9060 XT`) on **`0.594B` total tokens** (`0.575B` base continual pretraining + `19.7M` precision SFT tokens), `VAULT v2.5` pairs **4 Co-Prime Kenyon Cell banks** ($P = \{47, 53, 59, 61\} = 220$ cells) with **Tri-Horizon Salience Phase Binding** (`g0` local + `g1` phrase + `g2` wide `m=1..10` subword span binder), **Zero-Decay Unaddressed Cells ($\gamma = 1.0$)**, and a **Zero-`rocFFT` Fused Triton Decode Engine** (`_vault_v2_5_fft_bind_64_kernel` + CUDAGraph/HIPGraph).
-
-### 1. True $\mathcal{O}(1)$ Streaming Decode Latency & Mitosis Scaling (`2K -> 128K`)
-*Measured on `AMD Radeon RX 9060 XT` (ROCm 7.2, BF16/FP32). Step-wise streaming matches monolithic FP32 forward across chunk rollovers (`t=0..255`) with `5.91e-5` prefill max diff, `2.46e-5` decode median diff, and **`100.00%` Top-1 token agreement**:*
-
-| Bank Configuration | Context Length | Prefill Throughput | Persistent State | $\mathcal{O}(1)$ Decode Latency | Decode Throughput |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **`220c` Default** ($P=\{47,53,59,61\}$) | `2K` (`2,048`) | `10,214 tok/s` | `227.3 MB` | **`20.61 ms/tok`** | **`48.5 tok/s`** |
-| **`220c` Default** ($P=\{47,53,59,61\}$) | `32K` (`32,768`) | `13,077 tok/s` | `227.3 MB` | **`20.55 ms/tok`** | **`48.7 tok/s`** |
-| **`220c` Default** ($P=\{47,53,59,61\}$) | `128K` (`131,072`) | `13,119 tok/s` | `227.3 MB` | **`20.53 ms/tok`** | **`48.7 tok/s`** |
-| **`2,002c` Zero-Shot Mitosis** ($P=\{491,499,503,509\}$) | `32K` (`32,768`) | `2,803 tok/s` | `2,009.7 MB` | **`20.58 ms/tok`** | **`48.6 tok/s`** |
-| **`2,002c` Zero-Shot Mitosis** ($P=\{491,499,503,509\}$) | `128K` (`131,072`) | `2,798 tok/s` | `2,009.7 MB` | **`20.59 ms/tok`** | **`48.6 tok/s`** |
-
-### 2. Zero-Shot Academic Suite (`0.594B` Tokens vs. `100B–600B` External Baselines)
-*Full score sheets and verbatim outputs are archived in [`benchmarks/vault_scores_audit.txt`](benchmarks/vault_scores_audit.txt) and [`benchmarks/comparison_v2_4_step10k_vs_v2_5_sft.json`](benchmarks/comparison_v2_4_step10k_vs_v2_5_sft.json):*
-
-| Benchmark / Metric | VAULT v2.4 Base (`0.575B` tok) | **VAULT v2.5 SFT (`0.594B` tok)** | SFT Delta | Reference: Mamba-2 130M (`300B` tok) | Reference: SmolLM 135M (`600B` tok) |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **SciQ w/ Passage (`acc_norm`)** | `50.40%` | **`71.80%`** | **`+21.40%`** | `73.20%` (`81.90%` raw) | `76.40%` (`83.20%` raw) |
-| **SciQ Closed-Book (`acc_norm`)** | `37.00%` | **`50.70%`** | **`+13.70%`** | `46.70%` | `64.70%` |
-| **SciQ In-Context Working-Memory Gain** | `+13.40%` | **`+21.10%`** | **`+7.70%`** | `+26.50%` | `+11.70%` |
-| **ARC-Easy (`acc_norm`)** | `37.71%` (`41.37%` raw) | **`45.37%` (`46.34%` raw)** | **`+7.66%`** | `42.38%` | `57.41%` |
-| **ARC-Challenge (`acc_norm`)** | `23.12%` | **`23.72%`** | **`+0.60%`** | `23.81%` | `28.92%` |
-| **PIQA (`acc_norm`)** | `57.02%` (`58.92%` raw) | **`58.22%` (`59.09%` raw)** | **`+1.20%`** | `63.71%` | `68.44%` |
-| **HellaSwag (`acc_norm`)** | `35.73%` | **`37.13%`** | **`+1.40%`** | `43.07%` | `45.60%` |
-| **Winogrande (`acc`)** | `49.64%` | **`50.43%`** | **`+0.79%`** | `53.28%` | `52.72%` |
-| **BoolQ (`acc` / `acc_norm`)** | `56.93%` / `62.93%` | `41.53%` / `51.33%` | `-15.40%` | `56.33%` / `61.40%` | `59.87%` / `63.20%` |
-| **LAMBADA (`acc`)** | `12.27%` | **`13.73%`** | **`+1.46%`** | `42.93%` | `36.87%` |
-| **WikiText-2 (`BPB` / `TokPPL`)** | `1.5447` / `93.97` | **`1.5466` / `94.51`** | `+0.0019` BPB | `0.9645` / `19.98` | `0.9686` / `17.26` |
-| **9-Task Zero-Shot Average** | `39.98%` | **`43.63%`** | **`+3.65%`** | `49.49%` | `54.55%` |
-
-### 3. Multi-Needle Retrieval & `16x` Zero-Shot Context Extrapolation (`Trained Strictly at 2K`)
-* **Controlled `2K` Syntactic Gaps:** **`100.0%`** (`+3` tok), **`93.8%`** (`+15` tok boilerplate), **`87.5%`** (`+24` tok wide).
-* **Adversarial `>=8`-Subword Sibling Collisions (`>=7` identical prefix BPE tokens):** **`81.2%`** at `2K ChatML` (`+6.2%` vs v2.4) and **`75.0%`** at `4K ChatML` (`+16.7%` vs v2.4, `-0.70` bits NLL via Tri-Horizon `g2` span binding).
-* **`32K` Zero-Shot Co-Prime Mitosis (`2,002c`, `16x` beyond `2K` training context):** **`83.3%` exact needle recall (`91.7%` digit accuracy)** in 1-shot streaming and **`66.7%` exact (`83.3%` digit accuracy)** in zero-shot ChatML without a single long-context training step.
-* **Honest Compute Wall (`0.594B` Tokens):** Closed-book world trivia (`LAMBADA`, open-domain `WikiText-2` PPL) remains strictly token-budget bound at `<0.6B` tokens (`~1/500th` of a 300B-token run), and `64K–128K` exact string readout requires rescaling the Leaky-EMA horizon / short post-mitosis continual adaptation.
-
----
-
-
-## 🔬 Overview
-
-* **Transformers** rely on an unbounded **KV Cache** ($\mathcal{O}(T)$ memory, $\mathcal{O}(T^2)$ prefill compute).
-* **Mamba / Linear RNNs** compress all history into a single dense **Decaying State** ($h_t = A_t h_{t-1} + B_t x_t$), losing exact multi-span retrieval to $\lambda^T$ exponential washout and rank interference.
-* **VAULT** (**V**ariance-Weighted **A**ssociative **U**nitary **L**attice **T**ensor) locks novel memories into **isolated Co-Prime Orthogonal Nullspace Vaults** via chunkwise parallel Householder / Delta-Rule projection, where untouched vault cells never decay ($\lambda = 1.0$) and redundant boilerplate is bypassed by a token-selective write/erase gate.
-
-**VAULT** unifies core primitives across Philip Bartsch's (`@batteryphil`) open-source research stack:
-1. **Bit-Sliced 1.58-Bit Ternary `{pos_mask, neg_mask}` `POPCNT` Router** ([`buildbit-os`](https://github.com/batteryphil/buildbit-os) & [`SynapseOS`](https://github.com/batteryphil/SynapseOS))
-2. **Sparse Connectome Routing + `FusedAPLNorm` Homeostatic Inhibition** ([`BioNPC`](https://github.com/batteryphil/BioNPC))
-3. **Subspace-Factored Co-Prime Residue Banks & Prime Reciprocal Harmonics $\{1/p\}$** ([`prime-revisited`](https://github.com/batteryphil/prime-revisited))
-4. **`PRIME-Net` Discovered High-Gain Exponential Kernel $\phi(x) = \text{norm}(\exp(\beta \cdot \text{RMSNorm}(x)))$** ([`gist-memory`](https://github.com/batteryphil/gist-memory) & [`PRIME-Net`](https://github.com/batteryphil/PRIME-Net))
-5. **Sherman-Morrison / Gated Delta-PRIME Orthogonal Nullspace Vault Cells** ([`PRIME-Moment-Attention`](https://github.com/batteryphil/PRIME-Moment-Attention))
-6. **Dyadic 256-Token `GTRM` / `ConceptPerceptron` Multi-Scale Cascade** ([`PRIME-Moment-Attention`](https://github.com/batteryphil/PRIME-Moment-Attention) & [`thalamic-bloom`](https://github.com/batteryphil/thalamic-bloom))
-7. **`PRIME-Net` Symbolic Variance-Weighted Harmonic Consensus Readout** ([`PRIME-Net`](https://github.com/batteryphil/PRIME-Net))
-
----
-
-## 🚀 `VAULT v2` (`VAULTLMv2` + `FlashVAULT v2` Triton 3.8 Kernel)
-
-`VAULT v2` scales Co-Prime Nullspace Vaults into a hardware-optimal **151.3M-parameter** native $\mathcal{O}(L)$ language model (`d_model=768`, `n_layers=16`, `H_q=12`, `G_vault=4`, `d_head=64`, `d_ff=2048`):
-
-### Architectural Innovations in `VAULT v2`
-1. **True 3:1 Grouped-Vault Attention (`GVA`) with Zero Global Atomics (`src/kernels/flash_vault_v2_triton.py`):**
-   - `H = 12` independent query heads (each with its own learned routing query projection) share `G = 4` `88`-cell Co-Prime vaults ($P = \{17, 19, 23, 29\}$).
-   - Cuts recurrent state traffic **3x** (`1.41 MB` vs `4.22 MB` per layer) and eliminates all global atomic contention in both forward and backward passes.
-   - Uses a 6-step register/SRAM block-recursive triangular solver (`_invert_unit_lower_tri_64`) for exact chunkwise parallel WY / Delta-Rule updates ($C = 64$).
-2. **Token-Selective Write / Erase Gate $\beta_{b,g,t} \in (0.02, 0.96)$ with Analytical `dBeta`:**
-   - Dynamically suppresses boilerplate tokens ($\beta \to 0.02$, preserving vault rank) while locking high-salience entities, identifiers, and verification codes into orthogonal nullspace cells ($\beta \to 0.96$).
-3. **`CausalShortConv1D(kernel_size=4)` + `SiLU` before `Q, K, V` (`src/vault_v2_model.py`):**
-   - Binds multi-token key-value phrases (`"Verification Code: CHK-4811"`) prior to Co-Prime routing so multi-word spans are addressed and retrieved across `+15..35` token syntactic gaps.
-4. **Chunk-Relative RoPE + Multi-Scale Geometric Decay ($\gamma_h \in [0.66, 0.992]$) in the $\mathcal{O}(L)$ Local Syntax Branch:**
-   - Exact $64 \times 128$ overlapping causal window (`prev_chunk + curr_chunk`) provides crisp positional syntax for indentation, brackets, and multi-digit arithmetic while keeping global complexity strictly $\mathcal{O}(L)$.
-5. **Per-Head `RMSNorm` + Sigmoid Output Gate & Chunked Vocabulary Cross-Entropy:**
-   - Stabilizes hybrid local + vault fusion (`gnorm ~ 1.0`) and eliminates multi-GB dense logit allocations during full `L = 2048` training (`abs_diff = 0.00e+00` vs dense cross-entropy).
-
-### Verified `FlashVAULT v2` Kernel Parity & Single-GPU Throughput
-*Measured on a single consumer 16 GB GPU (`AMD Radeon RX 9060 XT`, ROCm 7.2, Triton 3.8, `tests/test_vault_v2.py`):*
-
-| Verification / Benchmark Suite | Configuration | Result |
-| :--- | :--- | :--- |
-| **FP32 Forward + Backward Parity** | `B=2, L=200 (non-multiple of 64), H=12, G=4, D=64` | `y=0.9999999`, `dQ=1.0000000`, `dK=0.9999999`, `dV=0.9999999`, `dBeta=1.0000000` |
-| **BF16 WMMA Forward + Backward Parity** | `B=2, L=200, H=12, G=4, D=64` | `y=0.9999908`, `dQ=0.9999918`, `dK=0.9999911`, `dV=0.9999920`, `dBeta=0.9999931` |
-| **Collinear Degeneracy Torture** | `256` identical BF16 tokens at high write gain ($\beta=0.85$) | **`0` `NaN`s / `0` `Inf`s** (finite forward & backward) |
-| **Chunked Vocabulary CE Parity** | `VAULTLMv2.forward_loss` vs dense FP32 CE | **`abs_diff = 0.00e+00`** |
-| **`VAULTLMv2` (151.3M) Train Throughput** | `L=2048, B=2, grad_ckpt=False` | **`3,060.0 tok/s`** (`14.79 GB` peak VRAM) |
-| **`VAULTLMv2` (151.3M) Train Throughput** | `L=2048, B=2, grad_ckpt="half"` | **`2,749.3 tok/s`** (**`9.26 GB`** peak VRAM) |
-| **`VAULTLMv2` (151.3M) Train Throughput** | `L=2048, B=4, grad_ckpt="three_quarter"` | **`2,514.7 tok/s`** (`10.72 GB` peak VRAM) |
-| **`VAULTLMv2` (151.3M) Train Throughput** | `L=2048, B=8, grad_ckpt=True` | **`2,389.8 tok/s`** (`11.01 GB` peak VRAM) |
-
----
-
-## 📊 Foundational Associative Memory Benchmarks (`VAULT` Core)
-
-### 1. 100,000-Token Associative Horizon Benchmark (Native C99 — `c/bench_vault.c`)
-*Stream of $T$ intervening tokens (85% Zipfian repeated language stream + 15% novel facts); measuring cosine similarity & exact Top-1 dictionary retrieval of the earliest target keys written at $t = 0$:*
-
-| Horizon $T$ (Tokens) | Linear Attention (`ELU+1`) | Standalone `GistLayer` (`exp`) | Standalone `PRIME-Moment` ($S_0, S_1, S_2$) | Single-Matrix `Dense-RLS` | **VAULT (C99)** |
-| :---: | :---: | :---: | :---: | :---: | :---: |
-| **100** | `0.1123` | `0.2356` | `0.0806` | `-0.0073` | **`1.0000` (`100.0%` Top-1)** |
-| **500** | `0.0501` | `0.0716` | `0.0443` | `0.0108` | **`1.0000` (`100.0%` Top-1)** |
-| **1,000** | `0.0361` | `0.0473` | `0.0313` | `0.0123` | **`1.0000` (`100.0%` Top-1)** |
-| **4,000** | `0.0327` | `0.0291` | `0.0319` | `-0.0433` | **`0.9990` (`100.0%` Top-1)** |
-| **8,000** | `0.0295` | `0.0309` | `0.0281` | `-0.0386` | **`0.9929` (`100.0%` Top-1)** |
-| **16,000** | `0.0228` | `0.0208` | `0.0225` | `0.0019` | **`0.9800` (`100.0%` Top-1)** |
-| **32,000** | `0.0310` | `0.0296` | `0.0303` | `-0.0285` | **`0.9731` (`100.0%` Top-1)** |
-| **64,000** | `0.0296` | `0.0282` | `0.0290` | `-0.0048` | **`0.9623` (`95.8%` Top-1)** |
-| **100,000** | `0.0248` | `0.0244` | `0.0246` | `-0.0146` | **`0.9645` (`100.0%` Top-1)** |
-
-* **C99 Single-Core Throughput:** **`179,565 tok/s`** (`5.569 us/token`)
-* **Innovation Gate Efficiency:** **`99.96%`** of redundant Zipfian writes bypassed automatically.
-
-### 2. Adversarial 100% Non-Repeating Stream (`tests/test_vault_rigorous.py`)
-*Zero redundancy—every single token is brand-new Gaussian noise, so the Innovation Gate cannot skip any write. Queries the oldest 32 memories buried under $N$ unique facts:*
-
-| Unique Facts $N$ | Linear (`ELU+1`) | Single-Matrix `Dense-RLS` | Replicated 4-Bank ($P=\{17,19,23,29\}$) | **Subspace-Factored VAULT ($P=\{83,89,97,101\}$)** |
-| :---: | :---: | :---: | :---: | :---: |
-| **32** | `0.1643` | `0.9552` | `1.0000` (`100.0%`) | **`1.0000` (`100.0%` Top-1)** |
-| **64** | `0.1227` | `0.3253` | `1.0000` (`100.0%`) | **`1.0000` (`100.0%` Top-1)** |
-| **256** | `0.0495` | `0.0113` | `0.9997` (`100.0%`) | **`0.9997` (`100.0%` Top-1)** |
-| **512** | `0.0042` | `0.0020` | `0.9933` (`100.0%`) | **`0.9981` (`100.0%` Top-1)** |
-| **1,024** | `0.0007` | `0.0057` | `0.9354` (`100.0%`) | **`0.9929` (`100.0%` Top-1)** |
-| **2,048** | `0.0013` | `0.0073` | `0.4660` (`50.0%`) | **`0.9587` (`100.0%` Top-1)** |
-| **3,072** | `-0.0153` | `0.0184` | `0.1353` (`0.0%`) | **`0.8849` (`100.0%` Top-1)** |
-
-### 3. Dyadic 256-Token GTRM Macro-Cascade (`tests/test_vault_rigorous.py`)
-*Streaming 4,096 tokens across 4 distinct Topic Epochs (1,024 tokens per epoch):*
-
-| Historical Topic Epoch | Distance Ago | Flat `GistLayer` Cosine | **VAULT Dyadic 256-Token GTRM Cascade** |
-| :--- | :---: | :---: | :---: |
-| **Epoch 0 (Oldest)** | `4,096` tokens ago | `-0.2332` (Washed out) | **`0.6087`** |
-| **Epoch 1** | `3,072` tokens ago | `0.2496` | **`0.8671`** |
-| **Epoch 2** | `2,048` tokens ago | `0.2091` | **`0.8676`** |
-| **Epoch 3 (Most Recent)** | `1,024` tokens ago | `0.9781` | **`0.9831`** |
-
----
-
-## 📂 Repository Structure
-
-```text
-VAULT/
-├── configuration_vault.py                # HuggingFace AutoConfig (`VAULTConfig`, Mitosis presets 220..2002)
-├── modeling_vault.py                     # HuggingFace AutoModelForCausalLM (`VAULTForCausalLM`, chat, mitosis)
-├── run_vault.py                          # 1-command runner, 4-domain live demo & streaming Chat REPL
-├── export_and_upload_hf.py               # Self-contained HuggingFace Hub + safetensors exporter & clean-room test
-├── c/                                    # Native C99 VAULT engine & 100K-token benchmarks
-│   ├── vault.h / vault.c                 # Core Co-Prime Nullspace Vault C99 implementation
-│   ├── bench_vault.c                     # 100,000-token head-to-head horizon benchmark
-│   └── torture_vault.c                   # Collinear & rank-saturation C99 torture suite
-├── src/
-│   ├── kernels/
-│   │   ├── flash_vault_v2_triton.py      # FlashVAULT v2: True 3:1 GVA + O(1) decode Triton kernels (CPU fallback)
-│   │   └── flash_vault_triton.py         # FlashVAULT v1: Chunkwise WY Triton kernel
-│   ├── vault_v2_5_model.py               # VAULTLMv2_5 (180.6M): Co-Prime Kenyon Cells, Tri-Horizon Binder & Mitosis
-│   ├── vault_v2_5_streaming.py           # Zero-rocFFT O(1) streaming engine (fused radix-8 FFT + CUDAGraph decode)
-│   ├── vault_v2_streaming.py             # VAULT v2.4 O(1) streaming engine & shared decode cache primitives
-│   ├── vault_v2_model.py                 # VAULTLMv2 (151.3M..180.5M): ShortConv1D, RoPE local, GVA, chunked CE
-│   ├── vault_lm_150m.py                  # VAULT-150M v1 backbone & shared RMSNorm/router primitives
-│   ├── flash_vault_module.py             # FlashVAULT v1 PyTorch wrapper
-│   ├── vault.py                          # PyTorch reference VAULT associative memory & Dyadic GTRM
-│   └── vault_surgery.py                  # Transformer-to-VAULT attention surgery utilities
-├── tests/
-│   ├── test_vault_v2_5_cpu.py            # VAULT v2.5 monolithic vs O(1) streaming parity & Zero-rocFFT audit
-│   ├── test_flash_vault_v2_invariants.py # FlashVAULT v2 mathematical & numerical invariant suite
-│   ├── test_vault_v2.py                  # FP32/BF16 parity, 256-token torture, chunked CE & VRAM suite
-│   ├── test_flash_vault_grad.py          # FlashVAULT v1 gradient verification
-│   └── test_vault_rigorous.py            # Non-repeating capacity & Dyadic GTRM falsification tests
-├── benchmarks/
-│   ├── vault_scores_audit.txt            # Complete plain-text score sheet & verbatim outputs (v2.4 10k vs v2.5)
-│   ├── comparison_v2_4_step10k_vs_v2_5_sft.json # Head-to-head Pre-SFT vs Post-SFT JSON report
-│   ├── bench_vault_v2_5_post10k_suite.py # Full O(1) latency, 128K Mitosis, sibling NIAH & 8-domain suite
-│   ├── eval_vault_v2_standalone.py       # 8-domain unseen benchmark + 2K..32K O(L) scaling audit
-│   └── *.py / *.json                     # Empirical benchmark scripts & recorded JSON audits
-├── data_v2/
-│   └── audit_report.json                 # Decontamination & token distribution audit (284.2M L=2048 tokens)
-├── prepare_vault_v2_data.py              # Decontaminated L=2048 NVMe memmap packer (WSD + ChatML SFT)
-├── prepare_vault_v2_5_sft_data.py        # Precision 4.92M-token SFT dataset builder (Python/Lua/prose/sibling NIAH)
-├── train_vault_v2.py                     # Stage 1 WSD Pretraining + Clean ChatML SFT engine
-├── train_vault_v2_4.py                   # Stage 2 Co-Prime Kenyon Cell continual pretraining (to Step 10,000)
-├── train_vault_v2_5_sft.py               # Stage 3 VAULT v2.5 precision SFT trainer (EMA + Val Gate)
-├── Makefile                              # Build, demo, REPL, verification, data prep, training & eval targets
-├── requirements.txt                      # Cross-platform Python dependencies
-├── LICENSE                               # Dual License summary + full GNU AGPL-3.0 text
-├── LICENSE-AGPL-3.0                      # Verbatim GNU Affero General Public License v3.0
-└── LICENSE-COMMERCIAL.md                 # Commercial License terms & contact details
-```
-
----
-
-## 🛠️ Make Targets & Developer Workflow
+## Quick start (CPU, Linux)
 
 ```bash
-# Install Python dependencies
-pip install -r requirements.txt
-
-# 1. Auto-download VAULT v2.5 from HuggingFace Hub & run 4-domain live streaming demo
-make demo
-
-# 2. Launch interactive streaming Chat REPL (with live /mitosis 2002 switching)
-make run
-
-# 3. Verify VAULT v2.5 O(1) Zero-rocFFT streaming parity & FlashVAULT v2 Triton kernels
-make test-v2-5
-make test-v2
-
-# 4. Run full VAULT v2.5 Post-10k benchmark suite (2K..128K O(1) scaling, NIAH, 9 zero-shot tasks)
-make bench-v2-5
-
-# 5. Reproduce training pipeline from scratch (Data -> WSD -> v2.4 Continual -> v2.5 SFT)
-make data-v2
-make train-v2
-
-# 6. Run foundational C99 & PyTorch associative memory falsification tests
-make test
+make -C runtime            # builds vault3_host + verifies scalar & AVX2 freestanding objects have 0 undefined symbols
+./runtime/vault3_host vault_v3_1.5b_q8_0.vlt3 --chat --prompt "Qu'est-ce qu'une arène mémoire statique en C ?" \
+    --system "Vous êtes VAULT v3, un composant linguistique concis." --n 128 --threads 12
+./runtime/vault3_host vault_v3_1.5b_q4_0.vlt3 --threads 24 --bench 64   # JSON throughput & RSS benchmark
 ```
 
----
+The runtime `mmap`s the file, validates the header, directory, tensor bounds/alignment, and scans **100% of `F32`, `BF16`, `Q8_0`, and `Q4_0` weights/scales** for `NaN`/`Inf` in `< 2 ms` via AVX2 (plus optional full CRC32 verification via `--verify`), then executes purely inside caller-supplied static arenas. User inputs passed to `--chat` are encoded with `allow_special = 0` (`v3_encode_ex`) so untrusted `<|im_start|>system` delimiters are neutralized, ChatML system prompts (`n_pin ≤ 512`) are auto-pinned in `k_sink`, and `v3_governor` / `CAAIGovernor` enforces forbidden output tokens (including BPE-split, homoglyph, reversed, 4-phase Base64/Base64URL, and 2-phase Hex encodings) prior to sampling.
 
-## ⚖️ Dual License (`AGPL-3.0-or-later` OR Commercial License)
+## Architecture
 
-Copyright (c) 2026 **Philip Bartsch** ([`@batteryphil`](https://github.com/batteryphil)). All rights reserved.
+The 28-layer Qwen2.5-1.5B-Instruct backbone ($d=1536$, 12 query / 2 KV heads, $\text{head\_dim}=128$, SwiGLU $8960$) is kept **frozen**. Full causal attention is replaced by **block sliding-window attention** ($W=1024$, active window $2W=2048$; configurable down to $W=512$) coupled with three $O(1)$-memory mechanisms shared identically between `src/vault_v3_model.py` and freestanding `runtime/vault3.c`:
 
-This repository is **dual-licensed** under:
+1. **Auto-Pinned Sink Bank (`max_sink = 512`):** Retains BOS + the ChatML system prompt across arbitrary context lengths without RoPE drift.
+2. **Coherent Segment KV Memory (`seg_budget = 1024`, `seg_min = 16, seg_max = 48`):** A 2-layer `SegmentScorer v2` MLP reads layers `(8, 16, 24)` with causal APL feature habituation (`λ = 0.985`), 3-tier structural break detection (`.?!\n;`, JSON/pipe/TSV `},` / `",` / `|` / `\t`, CSV `,`), authority-spoofing quarantine, and turn-gated **2-tier FNV-1a shingle resonance** (Tier-A strict IDs + Tier-B pure-alphabetic content words with APL divisive surround inhibition, sub-clause isolation, orphan-value newline continuation halo, 2-band Hop-2 spreading activation across layers `7..15` → `16..25`, and indirect temporal rollback resolution) routed across a 3-way GQA head split (`2 free / 2 archival / 2 supersession` heads per KV group) with post-retrieval linear annealing (`gen_dist 18..38`).
+3. **Kenyon Vault Associative Memory (`13, 17, 19` co-prime banks, 49 cells/KV head):** Receives evicted tokens via delta-rule writes with per-cell overflow rescaling (`|z| ≤ 65,536`, verified over infinite horizons) and gated cosine reads.
 
-1. **[GNU Affero General Public License v3.0 (`AGPL-3.0-or-later`)](LICENSE-AGPL-3.0)** — **Free & Open Source:**
-   - Free for **non-profit organizations, universities, academic researchers, students, educators, and personal projects**.
-   - Free for **open-source projects and businesses** that release the complete source code of any software, derivative work, or network/API/SaaS service using VAULT under **GNU AGPL-3.0** (including Section 13 network-interaction obligations).
-2. **[VAULT Commercial License](LICENSE-COMMERCIAL.md)** — **Closed-Source Business Use:**
-   - Required for **for-profit businesses and commercial entities** wishing to embed, integrate, distribute, or host VAULT in proprietary/closed-source software, hardware, internal enterprise deployments, APIs, or SaaS offerings **without** open-sourcing their own software under AGPL-3.0.
-   - For commercial licensing inquiries, see [`LICENSE-COMMERCIAL.md`](LICENSE-COMMERCIAL.md) or contact `@batteryphil` at [`https://github.com/batteryphil`](https://github.com/batteryphil).
+## Results
 
+### 1. Short-context academic benchmarks (zero-shot, ≤ 2,048 tokens)
+
+> **Important:** Within the active window VAULT v3 computes the same function as Qwen2.5-1.5B-Instruct (up to BF16 rounding). **These scores document that conversion and repackaging preserve Qwen2.5-1.5B-Instruct's zero-shot capabilities.**
+
+| Task (metric) | VAULT v2.5 180M | Mamba-1 130M | Mamba-2 130M | Mamba-3 MIMO 187M | SmolLM 135M | **VAULT v3 1.54B** |
+|---|---:|---:|---:|---:|---:|---:|
+| WikiText-2 word PPL ↓ | 313.75 | 37.10 | 36.04 | 45.55 | 36.60 | **16.49** |
+| LAMBADA acc | 13.73 | 42.33 | 42.93 | 33.47 | 36.87 | **59.73** |
+| ARC-Easy acc_norm | 45.37 | 42.26 | 42.38 | 57.87 | 57.41 | **76.60** |
+| ARC-Challenge acc_norm | 23.72 | 24.74 | 23.81 | 29.44 | 28.92 | **47.10** |
+| SciQ (with passage) acc_norm | 71.80 | 69.40 | 73.20 | 80.40 | 76.40 | **95.00** |
+| SciQ (closed book) acc_norm | 50.70 | 45.70 | 46.70 | 63.10 | 64.70 | **84.30** |
+| PIQA acc_norm | 58.22 | 63.60 | 63.71 | 67.74 | 68.44 | **76.12** |
+| HellaSwag acc_norm | 37.13 | 41.73 | 43.07 | 45.33 | 45.60 | **60.53** |
+| Winogrande acc | 50.43 | 52.41 | 53.28 | 49.09 | 52.72 | **63.46** |
+| BoolQ acc | 41.53 | 58.27 | 56.33 | 57.40 | 59.87 | **75.20** |
+| **9-task average** | 43.63 | 48.94 | 49.49 | 53.76 | 54.55 | **70.89** |
+
+### 2. Long-context retrieval, multi-hop joins, temporal rollback & $O(1)$ 100K horizon
+
+| Evaluation Suite | Context / Condition | Score / Metric |
+|---|---|---|
+| **8K Multi-Fact Retrieval** (26 evicted facts > 2W) | `VAULT v3` (`B = 1024`) vs. Full-Attn Qwen2.5-1.5B | **23/26 (88.5%)** vs. 14/26 (53.8%) |
+| **1,083-Token Chunk-Boundary Cliff** | Eviction across chunk 0 → 1 | **8/8 (100%)** |
+| **Newline-Split Key-Value Retrieval** | 12K tokens (`B = 512` & `B = 1024`) | **10/10 (100%)** |
+| **Dense Homogeneous Registry** (`n = 8..120` rows) | `B = 2048`: `n = 8, 24, 80` / `n = 120` (`2,640` fact tok) | **8/8 (100%)** / **7/8 (87.5%)** |
+| **Pure-Alphabetic ID-Free Registry** (`n = 48` rows) | Zero digits/`_`/`-` (`B = 1024` / `B = 2048`) | **6/8 (75.0%)** / **5/8 (62.5%)** (up from `1/8`) |
+| **2-Hop Evicted Relational Join** (`A → B` across chunks) | `n = 8 @ B = 1024` & `n = 32 @ B = 2048` | **7/8 (87.5%)** on both (up from `2/8` & `1/8`) |
+| **Contradictory & Rollback Chains** (8K–10K evicted) | 3-stage latest, `[t=1]` archival, 5-stage, & indirect rollback to `[t=2]` | **6/6 (100%)** on all four |
+| **Scorer-Sponge DoS & 20× Same-ID Chaff** | Up to 120 sponges (explicit & casual needles, `B = 1024`) | **100% survived** |
+| **Packed Stream Formats** (`B = 1024`) | Minified JSON (`60` KV) / Pipe secret (`55` KV) / Zero-delim blob | **8/8 (100%)** / **8/8 (100%)** / **7/8 (87.5%)** |
+| **16K → 100.4K Token Horizon** (3.1× Qwen's 32K) | Dual needles (`10%` & `55%` depth), GPU BF16 | **8/8 (100%)**, flat **3.832–3.834 GiB** VRAM (`1,356 tok/s`) |
+
+### 3. C runtime on CPU (AVX2+FMA, condvar thread pool + fused SwiGLU + parallel GQA)
+
+| Format | File Size | 1T decode | 12T decode | 24T decode | Peak RSS |
+|---|---:|---:|---:|---:|---:|
+| **Hybrid Q4_0** | 1,022.5 MB | 5.93 tok/s | 41.87 tok/s (23.9 ms) | **45.76–46.16 tok/s (21.7 ms)** | **1.51 GB** (flat `1..64T`) |
+| **Q8_0** | 1,657.2 MB | 5.83 tok/s | 30.13 tok/s (33.2 ms) | **34.8+ tok/s** | **2.13 GB** |
+| **BF16** | 3,104.3 MB | 2.94 tok/s | 20.58 tok/s (48.6 ms) | **23.4+ tok/s** | **3.55 GB** |
+
+### 4. Correctness, sanitizer & security checks (all passing)
+
+* **4-Way Numerical Parity (`tests/test_vlt3_runtime.py`):** PyTorch `forward == prefill+step == step == C99` across `F32 / BF16 / Q8_0 / Q4_0` and all Round-4 2-hop, rollback, Tier-B, sub-clause, orphan-halo, and divisive-budget paths (`max |Δ| ≤ 3.50e-5`, **100% top-1 agreement**; `1T == 8T` `0.0` ULP bit-identical).
+* **Sanitizers:** Clean under `ASan + LSan + UBSan` (3,000-step stress with Kenyon cell rescaling, Hop-2, rollback, Tier-B, sub-clause refinement & `v3_governor`) and `ThreadSanitizer` (8-thread parallel GQA + SwiGLU).
+* **`VTOK` Tokenizer:** 100% match with Hugging Face `AutoTokenizer` across arbitrary-length single pieces (`"!"*32769`, `" "*32769`, `1 MB` `"a"*1000000`), UAX #15 NFC normalization (`e\u0301`, Hangul Jamo, canonical combining-class reordering), and streaming 4-byte UTF-8 reassembly.
+* **Loader & OPI Governance:** `14/14` malformed or interior-`qNaN`/`-Inf` `.vlt3` files rejected (`rc = 2`) even without `--verify`; `0/12` GPU and `0/9` C `--chat` leaks across literal, ChatML-injected, indirect-JSON, concatenation-smuggled, separator-mutated (`SYS_CALL_EXEC`), zero-width, Greek/Cyrillic-homoglyph, character-reversed, 4-phase Base64/Base64URL, and 2-phase Hex (`0xNN` / `\xNN`) `SYSCALL_EXEC(` exfiltration vectors.
+
+## Intended use and scope
+
+VAULT v3 is intended as a **natural-language / communication component** (e.g. inside the Operating Organism project, where OPI remains the sole operational decision-maker). While `v3_governor` / `CAAIGovernor` deterministically blocks literal, split, homoglyph, reversed, Base64/Base64URL, and Hex syscall strings in $O(1)$ memory, open-ended substitution ciphers (such as ROT13 or custom codebooks) cannot be enumerated by a fixed lexical automaton without a secondary classifier; VAULT v3 should never be wired directly to unmediated OS command execution.
+
+## License and attribution
+
+* VAULT v3 architecture, Kenyon Vault, `SegmentScorer v2`, `VLT3`/`VTOK` formats and C runtime: © 2026 Philip Bartsch (batteryphil), **AGPL-3.0-or-later OR commercial license** (`LICENSE`, `LICENSE-AGPL-3.0`, `LICENSE-COMMERCIAL.md`).
+* Backbone weights and tokenizer are derived from **[Qwen/Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct)** by the Qwen Team, Alibaba Cloud, licensed under **Apache-2.0** (`LICENSE-APACHE-2.0-Qwen`). Modifications are listed in `NOTICE_VAULT_v3.md`.

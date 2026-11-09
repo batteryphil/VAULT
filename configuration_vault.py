@@ -43,6 +43,8 @@ class VAULTConfig(PretrainedConfig):
         chunk_size: int = 64,
         prime_banks: List[int] = None,
         ema_alpha: float = 0.00048828125,
+        ema_alpha_schedule: List[float] = None,
+        use_cortical_prior: bool = False,
         occ_alpha: float = 0.5,
         tie_word_embeddings: bool = False,
         bos_token_id: int = 0,
@@ -64,6 +66,8 @@ class VAULTConfig(PretrainedConfig):
         self.chunk_size = int(chunk_size)
         self.prime_banks = [int(p) for p in prime_banks]
         self.ema_alpha = float(ema_alpha)
+        self.ema_alpha_schedule = [float(a) for a in ema_alpha_schedule] if ema_alpha_schedule is not None else None
+        self.use_cortical_prior = bool(use_cortical_prior)
         self.occ_alpha = float(occ_alpha)
         self.im_start_token_id = int(im_start_token_id)
         self.im_end_token_id = int(im_end_token_id)

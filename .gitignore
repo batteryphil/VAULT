@@ -1,9 +1,11 @@
 # Model weights & checkpoints
 checkpoints/
+dist/
 *.pt
 *.pth
 *.safetensors
 *.ckpt
+*.vlt3
 
 # Binary datasets, packed shards & HF export staging (keep small JSON manifests tracked)
 data_v2/*.bin
@@ -18,6 +20,7 @@ hf_dist/
 c/bench_vault
 c/torture_vault
 c/libvault.so
+runtime/vault3_host
 *.o
 *.so
 

@@ -723,7 +723,79 @@
       "sciq_in_context_gain_pct": 21.1,
       "zero_shot_9task_avg_pct": 43.63,
       "total_eval_sec": 298.6
+    },
+    "VAULT_v3_1.5B": {
+      "title": "VAULT v3 (1.54B, 49c, Qwen2.5 Backbone + Kenyon Vault)",
+      "params": 1545635720,
+      "params_M": 1545.64,
+      "pretrain_tokens_B": 18000.0,
+      "wikitext2": {
+        "bpb": 0.7541,
+        "word_ppl": 16.49,
+        "native_tok_ppl": 9.6,
+        "evaluated_tokens": 298937,
+        "eval_sec": 31.91
+      },
+      "lambada": {
+        "n_samples": 1500,
+        "acc": 59.73,
+        "target_word_ppl": 6.09,
+        "eval_sec": 14.05
+      },
+      "multiple_choice": {
+        "arc_easy": {
+          "n_samples": 2376,
+          "acc": 76.81,
+          "acc_norm": 76.6,
+          "eval_sec": 52.6
+        },
+        "arc_challenge": {
+          "n_samples": 1172,
+          "acc": 43.94,
+          "acc_norm": 47.1,
+          "eval_sec": 26.96
+        },
+        "sciq_rc": {
+          "n_samples": 1000,
+          "acc": 95.3,
+          "acc_norm": 95.0,
+          "eval_sec": 45.97
+        },
+        "sciq_closedbook": {
+          "n_samples": 1000,
+          "acc": 84.6,
+          "acc_norm": 84.3,
+          "eval_sec": 21.09
+        },
+        "piqa": {
+          "n_samples": 1838,
+          "acc": 76.01,
+          "acc_norm": 76.12,
+          "eval_sec": 22.78
+        },
+        "hellaswag": {
+          "n_samples": 1500,
+          "acc": 46.47,
+          "acc_norm": 60.53,
+          "eval_sec": 34.75
+        },
+        "winogrande": {
+          "n_samples": 1267,
+          "acc": 63.46,
+          "acc_norm": 63.46,
+          "eval_sec": 13.48
+        },
+        "boolq": {
+          "n_samples": 1500,
+          "acc": 75.2,
+          "acc_norm": 75.67,
+          "eval_sec": 41.21
+        }
+      },
+      "sciq_in_context_gain_pct": 10.7,
+      "zero_shot_9task_avg_pct": 70.89,
+      "total_eval_sec": 315.7
     }
   },
-  "timestamp_last_updated": "2026-11-04T04:40:52-0600"
+  "timestamp_last_updated": "2026-11-05T18:38:14-0600"
 }

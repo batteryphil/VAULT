@@ -68,7 +68,10 @@ def flash_vault_v2_recurrent_reference(
     num_cells: int = 88,
     v2_1_consensus: bool = False,
     v2_2_beta_occ: bool = False,
-) -> torch.Tensor:
+    s_init: Optional[torch.Tensor] = None,
+    occ_init: Optional[torch.Tensor] = None,
+    return_final_state: bool = False,
+):
     """
     Exact step-by-step recurrent ground truth for True GVA FlashVAULT v2 / v2.1 / v2.2 / v2.3.
     """
@@ -84,8 +87,14 @@ def flash_vault_v2_recurrent_reference(
     bf = beta.float()
     bf_occ = beta.detach().float()
 
-    S = torch.zeros(B, G, num_cells, D, D, device=v.device, dtype=torch.float32)
-    occ = torch.zeros(B, G, num_cells, device=v.device, dtype=torch.float32)
+    if s_init is not None:
+        S = s_init.float().expand(B, G, num_cells, D, D).clone()
+    else:
+        S = torch.zeros(B, G, num_cells, D, D, device=v.device, dtype=torch.float32)
+    if occ_init is not None:
+        occ = occ_init.detach().float().expand(B, G, num_cells).clone()
+    else:
+        occ = torch.zeros(B, G, num_cells, device=v.device, dtype=torch.float32)
     outputs = []
 
     b_idx_g = torch.arange(B, device=v.device)[:, None]
@@ -102,6 +111,7 @@ def flash_vault_v2_recurrent_reference(
             S_k = S[b_idx_g, g_idx_g, ck]  # (B, G, D, D)
             pred_v = torch.einsum("bgvd,bgd->bgv", S_k, kt)
             delta = bt.unsqueeze(-1) * (vt - pred_v)
+            S = S.clone()
             S[b_idx_g, g_idx_g, ck] = S_k + torch.einsum("bgv,bgd->bgvd", delta, kt)
             if v2_2_beta_occ:
                 occ[b_idx_g, g_idx_g, ck] = occ[b_idx_g, g_idx_g, ck] + bt_occ
@@ -146,7 +156,10 @@ def flash_vault_v2_recurrent_reference(
 
         outputs.append(torch.stack(y_heads, dim=1))  # (B, H, D)
 
-    return torch.stack(outputs, dim=2).to(orig_dtype)
+    out_t = torch.stack(outputs, dim=2).to(orig_dtype)
+    if return_final_state:
+        return out_t, S.detach(), occ.detach()
+    return out_t
 
 
 # ==============================================================================
@@ -361,6 +374,7 @@ def _vault_v2_occ_weights_chunk_fwd(
 def _vault_v2_inter_scan_fwd(
     Q_ptr, K_ptr, U_ptr, W_ptr, CellQ_ptr, CellK_ptr,
     YCross_ptr, S_ckpt_ptr, Delta_ptr,
+    S_init_ptr, S_final_ptr,
     stride_qb, stride_qh, stride_ql, stride_qd,
     stride_kb, stride_kg, stride_kl, stride_kd,
     stride_ub, stride_ug, stride_ur, stride_ul, stride_ud,
@@ -368,6 +382,8 @@ def _vault_v2_inter_scan_fwd(
     stride_ckb, stride_ckg, stride_ckr, stride_ckl,
     stride_yb, stride_yh, stride_yr, stride_yl, stride_yd,
     stride_sb, stride_sg, stride_sm, stride_sdvblk, stride_sc, stride_sflat,
+    stride_sib, stride_sig, stride_sic,
+    stride_sfb, stride_sfg, stride_sfc,
     num_chunks,
     G: tl.constexpr,
     R: tl.constexpr,
@@ -388,6 +404,8 @@ def _vault_v2_inter_scan_fwd(
     CKPT_INTERVAL: tl.constexpr,
     USE_BF16_WMMA: tl.constexpr,
     SHARED_GROUP_CELL_Q: tl.constexpr = False,
+    HAS_S_INIT: tl.constexpr = False,
+    SAVE_S_FINAL: tl.constexpr = False,
 ):
     """
     Grid: (B * G * R, D // BLOCK_DV) — 100% branch-free WMMA scan supporting arbitrary 4-bank Co-Prime widths!
@@ -411,7 +429,17 @@ def _vault_v2_inter_scan_fwd(
     idx_c = tl.arange(0, CHUNK_SIZE).to(tl.int64)
     c_mask = offs_p[:, None] < bank_size
 
-    S_reg = tl.zeros([BANK_PAD, FLAT_DVD], dtype=tl.float32)
+    if HAS_S_INIT:
+        s_init_ptrs = (
+            S_init_ptr
+            + b * stride_sib
+            + g * stride_sig
+            + (base_cell + offs_p[:, None]).to(tl.int64) * stride_sic
+            + (dv_blk * FLAT_DVD + offs_flat[None, :])
+        )
+        S_reg = tl.load(s_init_ptrs, mask=c_mask, other=0.0).to(tl.float32)
+    else:
+        S_reg = tl.zeros([BANK_PAD, FLAT_DVD], dtype=tl.float32)
 
     k_grp_base = b * stride_kb + g * stride_kg
     u_bank_base = b * stride_ub + g * stride_ug + r * stride_ur
@@ -470,6 +498,16 @@ def _vault_v2_inter_scan_fwd(
 
         upd_flat = tl.reshape(delta_sub[:, :, None] * k_tile[:, None, :], [CHUNK_SIZE, FLAT_DVD])
         S_reg += _mdot(tl.trans(ok_f), upd_flat, USE_BF16_WMMA)
+
+    if SAVE_S_FINAL:
+        s_final_ptrs = (
+            S_final_ptr
+            + b * stride_sfb
+            + g * stride_sfg
+            + (base_cell + offs_p[:, None]).to(tl.int64) * stride_sfc
+            + (dv_blk * FLAT_DVD + offs_flat[None, :])
+        )
+        tl.store(s_final_ptrs, S_reg.to(S_final_ptr.dtype.element_ty), mask=c_mask)
 
 
 @triton.jit
@@ -595,7 +633,7 @@ def _vault_v2_intra_readout_bwd(
 def _vault_v2_inter_scan_bwd(
     Q_ptr, K_ptr, W_ptr, Delta_ptr, dDeltaIntra_ptr, CellQ_ptr, CellK_ptr, Weight_ptr,
     S_ckpt_ptr, dOut_ptr,
-    dQ_dv_ptr, dK_dv_ptr, dU_ptr, dW_dv_ptr,
+    dQ_dv_ptr, dK_dv_ptr, dU_ptr, dW_dv_ptr, dS_init_ptr,
     stride_qb, stride_qh, stride_ql, stride_qd,
     stride_kb, stride_kg, stride_kl, stride_kd,
     stride_ub, stride_ug, stride_ur, stride_ul, stride_ud,
@@ -603,6 +641,7 @@ def _vault_v2_inter_scan_bwd(
     stride_ckb, stride_ckg, stride_ckr, stride_ckl,
     stride_wb, stride_wh, stride_wr, stride_wl,
     stride_sb, stride_sg, stride_sm, stride_sdvblk, stride_sc, stride_sflat,
+    stride_dsb, stride_dsg, stride_dsc,
     num_chunks,
     L_total,
     NUM_DV_BLOCKS: tl.constexpr,
@@ -624,6 +663,7 @@ def _vault_v2_inter_scan_bwd(
     CKPT_INTERVAL: tl.constexpr,
     USE_BF16_WMMA: tl.constexpr,
     SHARED_GROUP_CELL_Q: tl.constexpr = False,
+    NEED_DS_INIT: tl.constexpr = False,
 ):
     bgr = tl.program_id(0).to(tl.int64)
     dv_blk = tl.program_id(1).to(tl.int64)
@@ -747,6 +787,16 @@ def _vault_v2_inter_scan_bwd(
         upd_k_flat = tl.reshape(-ddelta[:, :, None] * w_tile[:, None, :], [CHUNK_SIZE, FLAT_DVD])
         dS_reg += _mdot(tl.trans(ok_f), upd_k_flat, USE_BF16_WMMA)
 
+    if NEED_DS_INIT:
+        ds_init_ptrs = (
+            dS_init_ptr
+            + b * stride_dsb
+            + g * stride_dsg
+            + (base_cell + offs_p[:, None]).to(tl.int64) * stride_dsc
+            + (dv_blk * FLAT_DVD + offs_flat[None, :])
+        )
+        tl.store(ds_init_ptrs, dS_reg.to(dS_init_ptr.dtype.element_ty), mask=c_mask)
+
 
 @triton.jit
 def _vault_v2_wy_bwd(
@@ -828,7 +878,10 @@ class FlashVAULTv2Function(torch.autograd.Function):
         v2_2_beta_occ: bool = False,
         prime_banks: Tuple[int, int, int, int] = (17, 19, 23, 29),
         shared_group_cell_q: bool = False,
-    ) -> torch.Tensor:
+        s_init: Optional[torch.Tensor] = None,
+        occ_init: Optional[torch.Tensor] = None,
+        return_final_state: bool = False,
+    ):
         orig_dtype = v.dtype
         use_bf16_wmma = orig_dtype in (torch.bfloat16, torch.float16)
 
@@ -847,7 +900,8 @@ class FlashVAULTv2Function(torch.autograd.Function):
         assert D == 64 and R == 4
         assert ckpt_interval >= 1
 
-        save_ckpts = any(ctx.needs_input_grad[:4])
+        need_ds_init = (s_init is not None) and ctx.needs_input_grad[12]
+        save_ckpts = any(ctx.needs_input_grad[:4]) or need_ds_init
         # Hardware-exact RDNA4 VGPR invariant (`BANK_PAD * BLOCK_DV == 128` in backward -> <=192 VGPRs, 7s compile!):
         #   - ROCm eval (`not save_ckpts`, 1 state matrix `S_reg`): `block_dv=4, scan_warps=8/16`
         #   - NVIDIA CUDA (`not _is_rocm_backend()`): `scan_warps=4` (`128` threads/CTA) guarantees valid `m16n8k16`
@@ -902,6 +956,30 @@ class FlashVAULTv2Function(torch.autograd.Function):
         else:
             S_ckpt = torch.empty((1, 1, 1, 1, 1, 1), device=v.device, dtype=orig_dtype)
 
+        has_s_init = s_init is not None
+        if has_s_init:
+            assert s_init.dim() == 5 and s_init.shape[1:] == (G, total_cells, D, D) and s_init.size(0) in (1, B)
+            s_init_orig_b = int(s_init.size(0))
+            s_init_dtype = s_init.dtype
+            if s_init.stride(-1) != 1 or s_init.stride(-2) != D or s_init.stride(-3) != D * D:
+                s_init_c = s_init.detach().contiguous()
+            else:
+                s_init_c = s_init.detach()
+            s_init_b = s_init_c.expand(B, G, total_cells, D, D) if s_init_orig_b == 1 and B > 1 else s_init_c
+            sib_s, sig_s, sic_s = s_init_b.stride(0), s_init_b.stride(1), s_init_b.stride(2)
+        else:
+            s_init_orig_b = 0
+            s_init_dtype = orig_dtype
+            s_init_b = S_ckpt
+            sib_s, sig_s, sic_s = 0, 0, 0
+
+        if return_final_state:
+            S_final = torch.empty((B, G, total_cells, D, D), device=v.device, dtype=torch.float32)
+            sfb_s, sfg_s, sfc_s = S_final.stride(0), S_final.stride(1), S_final.stride(2)
+        else:
+            S_final = S_ckpt
+            sfb_s, sfg_s, sfc_s = 0, 0, 0
+
         _vault_v2_wy_fwd[(num_chunks, B * G, R)](
             pk, vc, bc, ck, U, W,
             *pk.stride(), *bc.stride(), *ck.stride(), *U.stride(),
@@ -918,7 +996,30 @@ class FlashVAULTv2Function(torch.autograd.Function):
             V2_2_BETA_OCC=v2_2_beta_occ,
             num_warps=2, num_stages=1,
         )
-        ChunkPrior = torch.cumsum(ChunkHist, dim=3) - ChunkHist
+        bank_offsets = (0, c1, c2, c3)
+        bank_sizes = (p0, p1, p2, p3)
+        if occ_init is not None:
+            occ_in_f = occ_init.detach().float().expand(B, G, total_cells)
+            occ_init_pad = torch.zeros((B, G, R, 1, bank_pad), device=v.device, dtype=torch.float32)
+            for r_i, (b_off, b_sz) in enumerate(zip(bank_offsets, bank_sizes)):
+                occ_init_pad[:, :, r_i, 0, :b_sz] = occ_in_f[:, :, b_off : b_off + b_sz]
+            ChunkPrior = occ_init_pad + (torch.cumsum(ChunkHist, dim=3) - ChunkHist)
+            del occ_init_pad
+        else:
+            ChunkPrior = torch.cumsum(ChunkHist, dim=3) - ChunkHist
+
+        if return_final_state:
+            occ_final = (
+                occ_init.detach().float().expand(B, G, total_cells).clone()
+                if occ_init is not None
+                else torch.zeros((B, G, total_cells), device=v.device, dtype=torch.float32)
+            )
+            hist_sum = ChunkHist.sum(dim=3)
+            for r_i, (b_off, b_sz) in enumerate(zip(bank_offsets, bank_sizes)):
+                occ_final[:, :, b_off : b_off + b_sz] += hist_sum[:, :, r_i, :b_sz]
+            del hist_sum
+        else:
+            occ_final = None
         del ChunkHist
 
         _vault_v2_occ_weights_chunk_fwd[(num_chunks, B * H)](
@@ -936,7 +1037,10 @@ class FlashVAULTv2Function(torch.autograd.Function):
         _vault_v2_inter_scan_fwd[(B * G * R, num_dv_blocks)](
             pq, pk, U, W, cq, ck,
             YCross, S_ckpt, Delta,
+            s_init_b, S_final,
             *pq.stride(), *pk.stride(), *U.stride(), *cq.stride(), *ck.stride(), *YCross.stride(), *S_ckpt.stride(),
+            sib_s, sig_s, sic_s,
+            sfb_s, sfg_s, sfc_s,
             num_chunks,
             G=G, R=R, HEADS_PER_GROUP=heads_per_group,
             CHUNK_SIZE=chunk_size, D=D,
@@ -945,6 +1049,8 @@ class FlashVAULTv2Function(torch.autograd.Function):
             SAVE_CHECKPOINTS=save_ckpts, CKPT_INTERVAL=ckpt_interval,
             USE_BF16_WMMA=use_bf16_wmma,
             SHARED_GROUP_CELL_Q=shared_group_cell_q,
+            HAS_S_INIT=has_s_init,
+            SAVE_S_FINAL=return_final_state,
             num_warps=scan_warps, num_stages=1,
         )
         if not save_ckpts:
@@ -965,16 +1071,22 @@ class FlashVAULTv2Function(torch.autograd.Function):
             ctx.meta = (
                 L_orig, pad_l, chunk_size, block_dv, scan_warps, use_bf16_wmma, ckpt_interval,
                 bank_pad, p0, p1, p2, p3, c1, c2, c3, shared_group_cell_q,
+                need_ds_init, s_init_orig_b, s_init_dtype, total_cells,
             )
 
-        return Out[:, :, :L_orig, :]
+        out_slice = Out[:, :, :L_orig, :]
+        if return_final_state:
+            ctx.mark_non_differentiable(S_final, occ_final)
+            return out_slice, S_final, occ_final
+        return out_slice
 
     @staticmethod
-    def backward(ctx, grad_out: torch.Tensor):
+    def backward(ctx, grad_out: torch.Tensor, *unused_state_grads):
         pq, pk, vc, bc, cq, ck, U, W, Delta, Weights, S_ckpt = ctx.saved_tensors
         (
             L_orig, pad_l, chunk_size, block_dv, scan_warps, use_bf16_wmma, ckpt_interval,
             bank_pad, p0, p1, p2, p3, c1, c2, c3, shared_group_cell_q,
+            need_ds_init, s_init_orig_b, s_init_dtype, total_cells,
         ) = ctx.meta
         orig_dtype = U.dtype
 
@@ -1006,12 +1118,19 @@ class FlashVAULTv2Function(torch.autograd.Function):
         dQ_dv = torch.empty((B * H * R, num_dv_blocks, L, D), device=pq.device, dtype=orig_dtype)
         dK_dv = torch.empty((B * G * R, num_dv_blocks, L, D), device=pq.device, dtype=orig_dtype)
         dW_dv = torch.empty((B * G * R, num_dv_blocks, L, D), device=pq.device, dtype=orig_dtype)
+        if need_ds_init:
+            dS_init_buf = torch.empty((B, G, total_cells, D, D), device=pq.device, dtype=torch.float32)
+            dsb_s, dsg_s, dsc_s = dS_init_buf.stride(0), dS_init_buf.stride(1), dS_init_buf.stride(2)
+        else:
+            dS_init_buf = S_ckpt
+            dsb_s, dsg_s, dsc_s = 0, 0, 0
 
         _vault_v2_inter_scan_bwd[(B * G * R, num_dv_blocks)](
             pq, pk, W, Delta, dDeltaIntra, cq, ck, Weights,
             S_ckpt, dout,
-            dQ_dv, dK_dv, dU, dW_dv,
+            dQ_dv, dK_dv, dU, dW_dv, dS_init_buf,
             *pq.stride(), *pk.stride(), *U.stride(), *cq.stride(), *ck.stride(), *Weights.stride(), *S_ckpt.stride(),
+            dsb_s, dsg_s, dsc_s,
             num_chunks, L,
             NUM_DV_BLOCKS=num_dv_blocks,
             G=G, R=R, HEADS_PER_GROUP=heads_per_group,
@@ -1021,9 +1140,19 @@ class FlashVAULTv2Function(torch.autograd.Function):
             CKPT_INTERVAL=ckpt_interval,
             USE_BF16_WMMA=use_bf16_wmma,
             SHARED_GROUP_CELL_Q=shared_group_cell_q,
+            NEED_DS_INIT=need_ds_init,
             num_warps=scan_warps, num_stages=1,
         )
         del dDeltaIntra
+
+        if need_ds_init:
+            if s_init_orig_b == 1 and B > 1:
+                dS_init = dS_init_buf.sum(dim=0, keepdim=True).to(s_init_dtype)
+            else:
+                dS_init = dS_init_buf.to(s_init_dtype)
+            del dS_init_buf
+        else:
+            dS_init = None
 
         dQ = (dQ_intra.float() + dQ_dv.sum(dim=1, dtype=torch.float32).view(B, H, R, L, D)).sum(dim=2).to(pq.dtype)
         del dQ_intra, dQ_dv
@@ -1061,7 +1190,7 @@ class FlashVAULTv2Function(torch.autograd.Function):
             dV = dV[:, :, :L_orig, :]
             dBeta = dBeta[:, :, :L_orig]
 
-        return dQ, dK, dV, dBeta, None, None, None, None, None, None, None, None
+        return dQ, dK, dV, dBeta, None, None, None, None, None, None, None, None, dS_init, None, None
 
 
 def flash_vault_v2_chunkwise(
@@ -1077,8 +1206,12 @@ def flash_vault_v2_chunkwise(
     v2_2_beta_occ: bool = False,
     prime_banks: Tuple[int, int, int, int] = (17, 19, 23, 29),
     shared_group_cell_q: bool = False,
-) -> torch.Tensor:
-    needs_grad = torch.is_grad_enabled() and any(t.requires_grad for t in (phi_q, phi_k, v, beta))
+    s_init: Optional[torch.Tensor] = None,
+    occ_init: Optional[torch.Tensor] = None,
+    return_final_state: bool = False,
+):
+    grad_tensors = [phi_q, phi_k, v, beta] + ([s_init] if s_init is not None else [])
+    needs_grad = torch.is_grad_enabled() and any(t.requires_grad for t in grad_tensors)
     if max(prime_banks) > 64:
         if _HAS_TRITON and phi_q.is_cuda and not needs_grad:
             from src.vault_v2_streaming import stateful_flash_vault_v2_chunkwise
@@ -1086,9 +1219,15 @@ def flash_vault_v2_chunkwise(
             B, _, _, D = phi_q.shape
             G = phi_k.size(1)
             total_cells = sum(int(p) for p in prime_banks)
-            S_state = torch.zeros((B, G, total_cells, D, D), device=v.device, dtype=torch.float32)
-            occ_state = torch.zeros((B, G, total_cells), device=v.device, dtype=torch.float32)
-            return stateful_flash_vault_v2_chunkwise(
+            if s_init is not None:
+                S_state = s_init.detach().float().expand(B, G, total_cells, D, D).clone()
+            else:
+                S_state = torch.zeros((B, G, total_cells, D, D), device=v.device, dtype=torch.float32)
+            if occ_init is not None:
+                occ_state = occ_init.detach().float().expand(B, G, total_cells).clone()
+            else:
+                occ_state = torch.zeros((B, G, total_cells), device=v.device, dtype=torch.float32)
+            out_st = stateful_flash_vault_v2_chunkwise(
                 phi_q,
                 phi_k,
                 v,
@@ -1103,6 +1242,7 @@ def flash_vault_v2_chunkwise(
                 prime_banks=prime_banks,
                 shared_group_cell_q=shared_group_cell_q,
             )
+            return (out_st, S_state, occ_state) if return_final_state else out_st
         from src.vault_v2_5_model import _vault_v2_5_cpu_chunkwise_autograd
 
         return _vault_v2_5_cpu_chunkwise_autograd(
@@ -1115,6 +1255,9 @@ def flash_vault_v2_chunkwise(
             chunk_size=chunk_size,
             v2_2_beta_occ=v2_2_beta_occ,
             prime_banks=prime_banks,
+            s_init=s_init,
+            occ_init=occ_init,
+            return_final_state=return_final_state,
         )
 
     if not (_HAS_TRITON and phi_q.is_cuda):
@@ -1128,6 +1271,9 @@ def flash_vault_v2_chunkwise(
             num_cells=sum(prime_banks),
             v2_1_consensus=v2_1_consensus,
             v2_2_beta_occ=v2_2_beta_occ,
+            s_init=s_init,
+            occ_init=occ_init,
+            return_final_state=return_final_state,
         )
 
     orig_dtype = v.dtype
@@ -1147,7 +1293,12 @@ def flash_vault_v2_chunkwise(
             v2_2_beta_occ,
             prime_banks,
             shared_group_cell_q,
+            s_init.to(run_dt) if s_init is not None else None,
+            occ_init,
+            return_final_state,
         )
+        if return_final_state:
+            return out_run[0].to(orig_dtype), out_run[1], out_run[2]
         return out_run.to(orig_dtype)
 
     return FlashVAULTv2Function.apply(
@@ -1163,6 +1314,9 @@ def flash_vault_v2_chunkwise(
         v2_2_beta_occ,
         prime_banks,
         shared_group_cell_q,
+        s_init,
+        occ_init,
+        return_final_state,
     )
 
 

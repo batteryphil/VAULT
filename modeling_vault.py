@@ -76,6 +76,8 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
                     grad_checkpoint="none",
                     prime_banks=tuple(config.prime_banks),
                     ema_alpha=float(config.ema_alpha),
+                    ema_alpha_schedule=getattr(config, "ema_alpha_schedule", None),
+                    use_cortical_prior=bool(getattr(config, "use_cortical_prior", False)),
                 )
                 if not config.tie_word_embeddings:
                     core.lm_head.weight = nn.Parameter(core.embed_tokens.weight.detach().clone())
@@ -217,14 +219,14 @@ class VAULTForCausalLM(PreTrainedModel, GenerationMixin):
         return compute_v2_5_shared_aux(x0_norm, b0, ema_alpha=self.ema_alpha)
 
     def _encode_hidden_with_aux(
-        self, input_ids: torch.Tensor, step_ratio: float = 1.0, return_ent_div: bool = False
+        self, input_ids: torch.Tensor, step_ratio: float = 1.0, return_ent_div: bool = False, **kwargs
     ):
         return VAULTLMv2_5._encode_hidden_with_aux(
-            self, input_ids, step_ratio=step_ratio, return_ent_div=return_ent_div
+            self, input_ids, step_ratio=step_ratio, return_ent_div=return_ent_div, **kwargs
         )
 
-    def _encode_hidden(self, input_ids: torch.Tensor, step_ratio: float = 1.0) -> torch.Tensor:
-        return self._encode_hidden_with_aux(input_ids, step_ratio=step_ratio)[0]
+    def _encode_hidden(self, input_ids: torch.Tensor, step_ratio: float = 1.0, **kwargs) -> torch.Tensor:
+        return self._encode_hidden_with_aux(input_ids, step_ratio=step_ratio, **kwargs)[0]
 
     def forward(
         self,
