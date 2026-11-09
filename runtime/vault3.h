@@ -12,8 +12,10 @@
  *       v3_tok_arena_size(model)    -> tokenizer merge table + O(n log n) BPE heap scratch
  *   - Every header field, 64-bit shape product, offset, size, CRC32, and NaN/Inf bound is
  *     validated in v3_load().
- *   - Supports dynamic ChatML system-prompt pinning (up to V3_MAX_SINK tokens), Kenyon Vault
- *     associative memory, and fixed-budget Segment-Evicted KV Memory.
+ *   - Supports dynamic ChatML system-prompt pinning (up to V3_MAX_SINK tokens), fixed-budget
+ *     Segment-Evicted KV Memory, APL causal EMA habituation, 2-tier shingle resonance, and
+ *     CAAI constitutional output governance.
+ *   - Archived Co-Prime Kenyon Cell C99 kernels are preserved in runtime/kenyon_cells_archive.h.
  */
 #ifndef VAULT3_H
 #define VAULT3_H
@@ -23,7 +25,6 @@
 
 #define V3_MAX_LAYERS 64
 #define V3_MAX_HEADS 256
-#define V3_MAX_BANKS 8
 #define V3_MAX_HEAD_DIM 256
 #define V3_MAX_SINK 512
 #define V3_MAX_SEG_FEAT 4
@@ -58,21 +59,19 @@ typedef struct {
 
 typedef struct {
     v3_tensor ln1, wq, bq, wk, bk, wv, bv, wo, ln2, wg, wu, wd;
-    v3_tensor a_k, a_q, beta_w, beta_b, alpha; /* Kenyon Vault */
 } v3_layer;
 
 typedef struct {
     const uint8_t *base;
     uint64_t size;
     uint32_t vocab_size, d_model, n_layers, n_heads, n_kv_heads, head_dim, d_ff, window;
-    uint32_t n_banks, primes[V3_MAX_BANKS], n_cells;
-    float rms_eps, rope_theta, vault_eps;
+    float rms_eps, rope_theta;
     uint32_t bos_id, eos_id, im_start_id, im_end_id, pad_id, weight_format, flags;
     uint32_t n_sink;            /* base attention-sink tokens (auto-expands on ChatML system turn) */
-    /* Optional Segment-Evicted KV Memory (seg_n_feat == 0 in Kenyon-only files) */
+    /* Fixed-budget Segment-Evicted KV Memory (seg_n_feat == 0 in SWA+sinks-only files) */
     uint32_t seg_budget, seg_hidden, seg_min, seg_max, seg_n_feat;
     uint32_t seg_layers[V3_MAX_SEG_FEAT];
-    v3_tensor embed, norm, route;
+    v3_tensor embed, norm;
     v3_tensor seg_ln_w, seg_ln_b, seg_w1, seg_b1, seg_w2, seg_b2;
     v3_layer layers[V3_MAX_LAYERS];
     /* tokenizer views (all point into the model buffer) */
@@ -95,10 +94,6 @@ typedef struct {
     float *k_prev, *k_cur;       /* [G][W][D] post-RoPE keys (positions re-based to [0, 2W)) */
     float *v_prev, *v_cur;       /* [G][W][D] values */
     float *kraw_prev, *kraw_cur; /* [G][W][D] pre-RoPE raw keys (for Segment Memory bank admission) */
-    float *kt_prev, *kt_cur;     /* [G][W][D] adapted Vault write keys */
-    float *b_prev, *b_cur;       /* [G][W] write strength */
-    float *M;                    /* [G][C][D][D] Kenyon cells */
-    float *z;                    /* [G][C][D] normalisers */
     float *k_sink_raw, *k_sink;  /* [G][S_cap][D] pre-RoPE and rotated sink keys */
     float *v_sink;               /* [G][S_cap][D] sink values */
     float *k_seg_raw, *k_seg;    /* [G][B_cap][D] pre-RoPE and rotated Segment Memory keys */
@@ -113,7 +108,6 @@ typedef void (*v3_parallel_for_fn)(void *ctx, v3_task_fn fn, void *arg, uint32_t
 typedef struct {
     const v3_model *m;
     uint64_t pos;            /* absolute token count */
-    int vault_on;
     int seg_on;
     int auto_pin;            /* 1 = automatically pin ChatML <|im_start|>system...<|im_end|> prefix */
     int pin_locked;
@@ -135,10 +129,8 @@ typedef struct {
     v3_parallel_for_fn par_for;
     void *par_ctx;
     v3_layer_state ls[V3_MAX_LAYERS];
-    float *x, *xb, *q, *qraw, *k, *kraw, *v, *att, *ao, *hb, *hb2, *logits, *tmp;
+    float *x, *xb, *q, *k, *kraw, *v, *att, *ao, *hb, *hb2, *logits;
     float *inv_freq, *cos_t, *sin_t, *cos_w, *sin_w;
-    float *w_phk, *w_delta;  /* chunk write scratch */
-    uint32_t *w_cells;
     /* Segment Memory state, APL causal EMA habituation & shingle resonance scratch */
     uint32_t *tok_prev, *tok_cur;
     float *sc_prev, *sc_cur, *seg_mx;

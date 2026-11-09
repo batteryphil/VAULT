@@ -3,15 +3,15 @@
 # Dual License: GNU AGPL-3.0-or-later (Free / Non-Profit / Open-Source) OR Commercial License
 # Copyright (c) 2026 Philip Bartsch (batteryphil)
 #
-# Export VAULT v3 (Qwen2.5 backbone + trained Kenyon Vault params) to VLT3 files.
+# Export VAULT v3 (Qwen2.5 backbone + trained SegmentScorer v2) to VLT3 files.
 #
-#   python tools/export_vlt3.py --vault_ckpt checkpoints/vault_v3_stage_a_best.pt --format q8_0 --out dist/vault_v3_q8_0.vlt3
+#   python tools/export_vlt3.py --seg_ckpt dist/hf_vault_v3/vault_params/vault_v3_seg_scorer.pt --format q8_0 --out dist/vault_v3_1.5b_q8_0.vlt3
 #
 # Formats:
 #   bf16 : matmul weights + embeddings BF16 (master release)
 #   q8_0 : matmul weights + embeddings Q8_0 (GGML-compatible 32-weight blocks, fp16 scale)
-#   q4_0 : matmul weights Q4_0, embeddings/tied output head Q8_0
-#   Norms, biases, Vault tensors and the routing projection are always F32 (small).
+#   q4_0 : matmul weights Q4_0 (with Q8_0 GQA KV & boundary Q/O projections), embeddings/tied output head Q8_0
+#   Norms and biases are always F32 (small).
 
 import argparse
 import json
@@ -31,13 +31,10 @@ DEFAULT_QWEN = "/home/phil/.cache/huggingface/hub/models--Qwen--Qwen2.5-1.5B-Ins
 
 
 def build_state(qwen_dir: str, vault_ckpt: str, window: int, seg_ckpt: str = "", seg_budget: int = 0):
+    _ = vault_ckpt  # legacy Kenyon flag accepted as no-op for CLI compatibility
     with open(os.path.join(qwen_dir, "config.json")) as f:
         qc = json.load(f)
     cfg = VAULTv3Config.from_qwen_config(qc, window=window)
-    if vault_ckpt:
-        ck = torch.load(vault_ckpt, map_location="cpu", weights_only=False)
-        if "config" in ck:
-            cfg = VAULTv3Config.from_dict(ck["config"])
     sck = None
     if seg_ckpt:
         sck = torch.load(seg_ckpt, map_location="cpu", weights_only=False)
@@ -49,9 +46,6 @@ def build_state(qwen_dir: str, vault_ckpt: str, window: int, seg_ckpt: str = "",
         cfg.seg_max = int(sck.get("max_seg", 48))
     m = VAULTv3ForCausalLM(cfg)
     load_qwen2_into_vault(m, qwen_dir)
-    if vault_ckpt:
-        missing, unexpected = m.load_state_dict(ck["vault_state"], strict=False)
-        assert not unexpected, unexpected
     if sck is not None:
         raw_st = sck["state"]
         remap = {
@@ -67,8 +61,8 @@ def build_state(qwen_dir: str, vault_ckpt: str, window: int, seg_ckpt: str = "",
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--qwen_dir", default=DEFAULT_QWEN)
-    ap.add_argument("--vault_ckpt", default="", help="Stage A/C Vault params checkpoint (empty = untrained Vault, gate 0)")
-    ap.add_argument("--seg_ckpt", default="", help="Segment Scorer checkpoint (e.g. checkpoints/vault_v3_seg_scorer.pt)")
+    ap.add_argument("--vault_ckpt", default="", help="Deprecated no-op (Kenyon modules archived in src/kenyon_cells.py)")
+    ap.add_argument("--seg_ckpt", default="", help="Segment Scorer checkpoint (e.g. dist/hf_vault_v3/vault_params/vault_v3_seg_scorer.pt)")
     ap.add_argument("--seg_budget", type=int, default=1024, help="Default Segment Memory KV budget when --seg_ckpt is given")
     ap.add_argument("--window", type=int, default=1024)
     ap.add_argument("--format", choices=["f32", "bf16", "q8_0", "q4_0"], default="q8_0")

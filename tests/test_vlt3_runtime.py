@@ -4,10 +4,11 @@
 #
 # Cross-checks the freestanding C runtime (runtime/vault3_host) against the Python reference.
 #   1. Tiny random model exported as F32, BF16, Q8_0, and Q4_0 VLT3: C logits == Python streaming logits
-#      over >9 chunk boundaries (exercises RoPE re-basing, sinks, Kenyon Vault writes/reads, GQA, AVX2, pthreads).
+#      over >9 chunk boundaries (exercises RoPE re-basing, sinks, Segment Memory eviction, GQA, AVX2, pthreads).
 #   2. Single-thread vs 8-thread determinism check.
-#   3. Tokenizer: C byte-level BPE == HF tokenizer on a multilingual / code / whitespace corpus.
-#   4. Pre-load bounds & CRC validation: corrupted headers/offsets/alignments/CRCs are cleanly rejected.
+#   3. Tokenizer: C byte-level BPE == HF tokenizer on a multilingual / code / whitespace / >32KB / NFC corpus.
+#   4. Pre-load bounds & CRC validation: corrupted headers/offsets/alignments/CRCs/non-zero Kenyon slots rejected.
+#   5. Archived freestanding C99 Kenyon Cell header (runtime/kenyon_cells_archive.h) compile + PyTorch parity check.
 
 import os
 import struct
@@ -31,19 +32,18 @@ HOST = os.path.join(ROOT, "runtime", "vault3_host")
 
 def tiny_model() -> VAULTv3ForCausalLM:
     torch.manual_seed(3)
-    cfg = VAULTv3Config(vocab_size=151936, d_model=64, n_layers=2, n_heads=4, n_kv_heads=2, head_dim=16, d_ff=128,
-                        window=16, n_sink=4, vault_primes=(3, 5, 7), rope_theta=1_000_000.0)
+    cfg = VAULTv3Config(
+        vocab_size=151936, d_model=64, n_layers=2, n_heads=4, n_kv_heads=2, head_dim=16, d_ff=128,
+        window=16, n_sink=4, rope_theta=1_000_000.0,
+        seg_budget=12, seg_hidden=32, seg_min=3, seg_max=7, seg_layers=(0, 1),
+    )
     m = VAULTv3ForCausalLM(cfg).float().eval()
     with torch.no_grad():
         for n, p in m.named_parameters():
-            if "layernorm" in n or n == "norm.weight":
+            if "layernorm" in n or n in ("norm.weight", "seg_scorer.ln.weight"):
                 p.uniform_(0.8, 1.2)
-            elif ".vault.a_" in n:
-                p.add_(0.2 * torch.randn_like(p))
-            elif ".vault.alpha" in n:
-                p.copy_(torch.randn_like(p))
-            elif ".vault.beta" in n:
-                p.normal_(0.0, 0.3)
+            elif n == "seg_scorer.ln.bias":
+                p.normal_(0.0, 0.05)
             else:
                 p.normal_(0.0, 0.15)
     return m
@@ -202,6 +202,12 @@ def check_validation_rejects_corrupt_files():
                 break
         cases.append(("nan_q8_midblock_unverified", b, False))
 
+        # 11. Non-zero legacy Kenyon n_banks field in header (offset 112) rejected with V3_E_LIMIT
+        b = bytearray(raw)
+        struct.pack_into("<I", b, 112, 3)
+        _repack_hdr_crc(b)
+        cases.append(("nonzero_legacy_nbanks", b, False))
+
         for name, data, ver in cases:
             p = os.path.join(td, f"{name}.vlt3")
             with open(p, "wb") as f:
@@ -209,7 +215,7 @@ def check_validation_rejects_corrupt_files():
             cmd = [HOST, p, *(["--verify"] if ver else []), "--bench", "1"]
             r = subprocess.run(cmd, capture_output=True, text=True)
             assert r.returncode == 2, f"case {name} returned {r.returncode}: {r.stderr}"
-        print(f"[validation] {len(cases)}/{len(cases)} malformed/corrupt/NaN .vlt3 files cleanly rejected before execution")
+        print(f"[validation] {len(cases)}/{len(cases)} malformed/corrupt/NaN/legacy .vlt3 files cleanly rejected before execution")
 
 
 def check_segment_and_autopin():
@@ -221,7 +227,7 @@ def check_segment_and_autopin():
     torch.manual_seed(17)
     cfg = VAULTv3Config(
         vocab_size=151936, d_model=64, n_layers=3, n_heads=4, n_kv_heads=2, head_dim=16, d_ff=128,
-        window=16, n_sink=4, max_sink=64, vault_primes=(3, 5, 7), rope_theta=1_000_000.0,
+        window=16, n_sink=4, max_sink=64, rope_theta=1_000_000.0,
         seg_budget=14, seg_hidden=32, seg_min=3, seg_max=7, seg_layers=(0, 1, 2),
     )
     m = VAULTv3ForCausalLM(cfg).float().eval()
@@ -231,10 +237,6 @@ def check_segment_and_autopin():
                 p.uniform_(0.8, 1.2)
             elif n == "seg_scorer.ln.bias":
                 p.normal_(0.0, 0.05)
-            elif ".vault.a_" in n:
-                p.add_(0.2 * torch.randn_like(p))
-            elif ".vault.alpha" in n:
-                p.copy_(torch.randn_like(p))
             else:
                 p.normal_(0.0, 0.15)
 
@@ -253,7 +255,7 @@ def check_segment_and_autopin():
         ref = VAULTv3ForCausalLM(vlt3_config(vf)).float().eval()
         ref.load_state_dict(vlt3_to_state_dict(vf), strict=True)
         with torch.no_grad():
-            py = ref(ids_t, mode="block", vault_on=True).numpy()[0]
+            py = ref(ids_t, mode="block").numpy()[0]
         c = run_c_logits(p, chat_ids, list(range(len(chat_ids))), threads=8)
         err = float(np.abs(c - py).max())
         rel = err / (float(np.abs(py).max()) + 1e-9)
@@ -282,7 +284,7 @@ def check_round3_mechanisms_and_governor():
     torch.manual_seed(31)
     cfg = VAULTv3Config(
         vocab_size=151936, d_model=96, n_layers=8, n_heads=6, n_kv_heads=2, head_dim=16, d_ff=192,
-        window=24, n_sink=4, max_sink=64, vault_primes=(3, 5, 7), rope_theta=1_000_000.0,
+        window=24, n_sink=4, max_sink=64, rope_theta=1_000_000.0,
         seg_budget=48, seg_hidden=32, seg_min=4, seg_max=10, seg_layers=(2, 4, 6),
     )
     m = VAULTv3ForCausalLM(cfg).float().eval()
@@ -292,10 +294,6 @@ def check_round3_mechanisms_and_governor():
                 p.uniform_(0.8, 1.2)
             elif n == "seg_scorer.ln.bias":
                 p.normal_(0.0, 0.05)
-            elif ".vault.a_" in n:
-                p.add_(0.2 * torch.randn_like(p))
-            elif ".vault.alpha" in n:
-                p.copy_(torch.randn_like(p))
             else:
                 p.normal_(0.0, 0.12)
 
@@ -323,13 +321,13 @@ def check_round3_mechanisms_and_governor():
         ref.load_state_dict(vlt3_to_state_dict(vf), strict=True)
 
         with torch.no_grad():
-            py_fwd = ref(ids_t, mode="block", vault_on=True).numpy()[0]
+            py_fwd = ref(ids_t, mode="block").numpy()[0]
             py_step = py_stream_logits(ref, chat_ids)
             pf_len = len(chat_ids) - 12
-            lg_pf, st_pf = ref.prefill(ids_t[:, :pf_len], vault_on=True)
+            lg_pf, st_pf = ref.prefill(ids_t[:, :pf_len])
             tail = [lg_pf[0].numpy()]
             for tid in chat_ids[pf_len:]:
-                tail.append(ref.step(torch.tensor([tid]), st_pf, vault_on=True)[0].numpy())
+                tail.append(ref.step(torch.tensor([tid]), st_pf)[0].numpy())
             py_pf_tail = np.stack(tail, axis=0)
             assert st_pf.seg_bias_active, "Expected turn-gated shingle resonance to activate on assistant turn"
 
@@ -390,7 +388,7 @@ def check_round4_mechanisms_and_governor():
     torch.manual_seed(43)
     cfg = VAULTv3Config(
         vocab_size=151936, d_model=96, n_layers=8, n_heads=6, n_kv_heads=2, head_dim=16, d_ff=192,
-        window=64, n_sink=4, max_sink=64, vault_primes=(3, 5, 7), rope_theta=1_000_000.0,
+        window=64, n_sink=4, max_sink=64, rope_theta=1_000_000.0,
         seg_budget=256, seg_hidden=32, seg_min=4, seg_max=24, seg_layers=(2, 4, 6),
     )
     m = VAULTv3ForCausalLM(cfg).float().eval()
@@ -400,10 +398,6 @@ def check_round4_mechanisms_and_governor():
                 p.uniform_(0.8, 1.2)
             elif n == "seg_scorer.ln.bias":
                 p.normal_(0.0, 0.05)
-            elif ".vault.a_" in n:
-                p.add_(0.2 * torch.randn_like(p))
-            elif ".vault.alpha" in n:
-                p.copy_(torch.randn_like(p))
             else:
                 p.normal_(0.0, 0.12)
 
@@ -529,15 +523,15 @@ def check_round4_mechanisms_and_governor():
             ids_t = torch.tensor([chat_ids], dtype=torch.long)
 
             with torch.no_grad():
-                py_fwd = ref(ids_t, mode="block", vault_on=True).numpy()[0]
+                py_fwd = ref(ids_t, mode="block").numpy()[0]
                 py_step = py_stream_logits(ref, chat_ids)
-                lg_pf, st_pf = ref.prefill(torch.tensor([prompt_only], dtype=torch.long), vault_on=True)
+                lg_pf, st_pf = ref.prefill(torch.tensor([prompt_only], dtype=torch.long))
                 assert st_pf.seg_bias_active and st_pf.seg_bias_mode == exp_init_mode, (
                     cname, st_pf.seg_bias_active, st_pf.seg_bias_mode, exp_init_mode
                 )
                 tail = [lg_pf[0].numpy()]
                 for tid in tail_ids:
-                    tail.append(ref.step(torch.tensor([tid]), st_pf, vault_on=True)[0].numpy())
+                    tail.append(ref.step(torch.tensor([tid]), st_pf)[0].numpy())
                 py_pf_tail = np.stack(tail, axis=0)
                 assert bool(st_pf.seg_bias_active) == exp_end_active, (cname, st_pf.seg_bias_active, exp_end_active)
 
@@ -556,7 +550,7 @@ def check_round4_mechanisms_and_governor():
         # Verify M_cnt > 1024 APL divisive log-normalization (v3_logf vs math.log) in C99 vs Python
         cfg_div = VAULTv3Config(
             vocab_size=151936, d_model=96, n_layers=8, n_heads=6, n_kv_heads=2, head_dim=16, d_ff=192,
-            window=64, n_sink=4, max_sink=64, vault_primes=(3, 5, 7), rope_theta=1_000_000.0,
+            window=64, n_sink=4, max_sink=64, rope_theta=1_000_000.0,
             seg_budget=1280, seg_hidden=32, seg_min=4, seg_max=24, seg_layers=(2, 4, 6),
         )
         m_div = VAULTv3ForCausalLM(cfg_div).float().eval()
@@ -575,7 +569,7 @@ def check_round4_mechanisms_and_governor():
         )
         div_ids = build_chatml_ids(tok, user_prompt=div_user, system_prompt=sys_p) + encode_ordinary(tok, "silverfalcon")
         with torch.no_grad():
-            py_div = ref_div(torch.tensor([div_ids], dtype=torch.long), mode="block", vault_on=True).numpy()[0]
+            py_div = ref_div(torch.tensor([div_ids], dtype=torch.long), mode="block").numpy()[0]
         c_div = run_c_logits(p_div, div_ids, [len(div_ids) - 3, len(div_ids) - 2, len(div_ids) - 1], threads=8)
         py_div_sub = py_div[[len(div_ids) - 3, len(div_ids) - 2, len(div_ids) - 1]]
         err_d = float(np.abs(py_div_sub - c_div).max())
@@ -693,6 +687,146 @@ int main(int argc, char **argv) {
         print(f"[r4-governor] Python & C99 blocked {len(b64_evasions)}/{len(b64_evasions)} Reverse/Base64(4-phase)/Hex(2-phase) evasions, 0/{len(benign_streams)} false positives")
 
 
+def check_archived_c99_kenyon_header():
+    """Verify runtime/kenyon_cells_archive.h compiles freestanding (0 external symbols) and matches src/kenyon_cells.py."""
+    from src.kenyon_cells import kenyon_read, kenyon_write, make_kenyon_route, unit_rms
+
+    with tempfile.TemporaryDirectory() as td:
+        fs_c = os.path.join(td, "kc_freestanding.c")
+        fs_o = os.path.join(td, "kc_freestanding.o")
+        with open(fs_c, "w") as f:
+            f.write(r'''
+#include "kenyon_cells_archive.h"
+void kc_entry_smoke(
+    const kc_config *cfg, float *M, float *z,
+    const float *kt, const float *v, const float *beta,
+    const float *qt, float *out, float *phq,
+    float *w_phk, float *w_delta, uint32_t *w_cells,
+    const float *A
+) {
+    kc_unit_rms(out, qt, cfg->head_dim);
+    kc_vecmat(phq, out, A, cfg->head_dim);
+    out[0] = kc_tanhf(phq[0]);
+    kc_write_chunk(cfg, M, z, kt, v, beta, w_phk, w_delta, w_cells);
+    kc_read(cfg, M, z, qt, out, phq);
+}
+''')
+        subprocess.run(
+            [
+                "gcc", "-std=c99", "-O2", "-ffreestanding", "-nostdlib",
+                "-Wall", "-Wextra", "-Werror", "-Wframe-larger-than=2048",
+                "-I", os.path.join(ROOT, "runtime"), "-c", fs_c, "-o", fs_o,
+            ],
+            check=True,
+        )
+        undef = subprocess.run(["nm", "-u", fs_o], check=True, capture_output=True, text=True).stdout.strip()
+        assert undef == "", f"kenyon_cells_archive.h has undefined symbols:\n{undef}"
+
+        primes = (3, 5, 7)
+        D, W, QN = 8, 6, 4
+        C = sum(primes)
+        torch.manual_seed(2026)
+        route = make_kenyon_route(D, primes, seed=20261105).float()
+        kt1 = torch.randn(1, 1, W, D)
+        v1 = torch.randn(1, 1, W, D)
+        beta1 = torch.sigmoid(torch.randn(1, 1, W))
+        qt1 = torch.randn(1, 1, 1, QN, D)
+        kt2 = torch.randn(1, 1, W, D)
+        v2 = torch.randn(1, 1, W, D)
+        beta2 = torch.full((1, 1, W), 8000.0)   # drives z_max ~80,000 > 65536.0 to test homogeneous 0.5x rescaling
+        qt2 = torch.randn(1, 1, 1, QN, D)
+
+        with torch.no_grad():
+            M0 = torch.zeros(1, 1, C, D, D)
+            z0 = torch.zeros(1, 1, C, D)
+            M1, z1 = kenyon_write(M0, z0, kt1, v1, beta1, route, primes, eps=1e-6)
+            out1_py = kenyon_read(M1, z1, qt1, route, primes, eps=1e-6)[0, 0, 0].numpy()
+            M2, z2 = kenyon_write(M1, z1, kt2, v2, beta2, route, primes, eps=1e-6)
+            assert 32768.0 < float(z2.max()) <= 65536.0, f"Expected homogeneous rescaling: {float(z2.max())}"
+            out2_py = kenyon_read(M2, z2, qt2, route, primes, eps=1e-6)[0, 0, 0].numpy()
+            urms_py = unit_rms(qt1[0, 0, 0, 0]).numpy()
+
+        in_bin = os.path.join(td, "kc_in.bin")
+        out_bin = os.path.join(td, "kc_out.bin")
+        with open(in_bin, "wb") as f:
+            for arr in (route, kt1[0, 0], v1[0, 0], beta1[0, 0], qt1[0, 0, 0], kt2[0, 0], v2[0, 0], beta2[0, 0], qt2[0, 0, 0]):
+                f.write(arr.contiguous().numpy().astype(np.float32).tobytes())
+
+        par_c = os.path.join(td, "kc_parity.c")
+        par_bin = os.path.join(td, "kc_parity")
+        with open(par_c, "w") as f:
+            f.write(r'''
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include "kenyon_cells_archive.h"
+int main(int argc, char **argv) {
+    assert(argc == 3);
+    const uint32_t D = 8, W = 6, C = 15, NB = 3, QN = 4;
+    float route[8 * 15], kt1[6 * 8], v1[6 * 8], beta1[6], qt1[4 * 8];
+    float kt2[6 * 8], v2[6 * 8], beta2[6], qt2[4 * 8];
+    FILE *fi = fopen(argv[1], "rb");
+    assert(fi);
+    assert(fread(route, 4, D * C, fi) == D * C);
+    assert(fread(kt1, 4, W * D, fi) == W * D);
+    assert(fread(v1, 4, W * D, fi) == W * D);
+    assert(fread(beta1, 4, W, fi) == W);
+    assert(fread(qt1, 4, QN * D, fi) == QN * D);
+    assert(fread(kt2, 4, W * D, fi) == W * D);
+    assert(fread(v2, 4, W * D, fi) == W * D);
+    assert(fread(beta2, 4, W, fi) == W);
+    assert(fread(qt2, 4, QN * D, fi) == QN * D);
+    fclose(fi);
+
+    kc_config cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.head_dim = D; cfg.window = W; cfg.n_banks = NB;
+    cfg.primes[0] = 3; cfg.primes[1] = 5; cfg.primes[2] = 7;
+    cfg.n_cells = C; cfg.vault_eps = 1e-6f; cfg.route = route;
+
+    float M[15 * 8 * 8] = {0}, z[15 * 8] = {0};
+    float w_phk[6 * 8], w_delta[6 * 3 * 8], phq[8], out1[4 * 8], out2[4 * 8], urms[8];
+    uint32_t w_cells[6 * 3];
+
+    kc_unit_rms(urms, qt1, D);
+    kc_write_chunk(&cfg, M, z, kt1, v1, beta1, w_phk, w_delta, w_cells);
+    for (uint32_t q = 0; q < QN; q++) kc_read(&cfg, M, z, qt1 + q * D, out1 + q * D, phq);
+    kc_write_chunk(&cfg, M, z, kt2, v2, beta2, w_phk, w_delta, w_cells);
+    for (uint32_t q = 0; q < QN; q++) kc_read(&cfg, M, z, qt2 + q * D, out2 + q * D, phq);
+
+    FILE *fo = fopen(argv[2], "wb");
+    assert(fo);
+    fwrite(urms, 4, D, fo);
+    fwrite(out1, 4, QN * D, fo);
+    fwrite(out2, 4, QN * D, fo);
+    fwrite(M, 4, C * D * D, fo);
+    fwrite(z, 4, C * D, fo);
+    fclose(fo);
+    return 0;
+}
+''')
+        subprocess.run(
+            ["gcc", "-std=c99", "-O2", "-Wall", "-Wextra", "-Werror", "-I", os.path.join(ROOT, "runtime"), par_c, "-o", par_bin],
+            check=True,
+        )
+        subprocess.run([par_bin, in_bin, out_bin], check=True)
+        raw_out = np.fromfile(out_bin, dtype=np.float32)
+        off = 0
+        urms_c = raw_out[off : off + D]; off += D
+        out1_c = raw_out[off : off + QN * D].reshape(QN, D); off += QN * D
+        out2_c = raw_out[off : off + QN * D].reshape(QN, D); off += QN * D
+        M2_c = raw_out[off : off + C * D * D].reshape(C, D, D); off += C * D * D
+        z2_c = raw_out[off : off + C * D].reshape(C, D)
+
+        e_urms = float(np.abs(urms_c - urms_py).max())
+        e_o1 = float(np.abs(out1_c - out1_py).max())
+        e_o2 = float(np.abs(out2_c - out2_py).max())
+        e_m = float(np.abs(M2_c - M2[0, 0].numpy()).max()) / (float(np.abs(M2[0, 0].numpy()).max()) + 1e-9)
+        e_z = float(np.abs(z2_c - z2[0, 0].numpy()).max()) / (float(np.abs(z2[0, 0].numpy()).max()) + 1e-9)
+        print(f"[kenyon-archive c99==py] 0 undef syms | urms={e_urms:.2e} out1={e_o1:.2e} out2(rescaled)={e_o2:.2e} rel_M={e_m:.2e} rel_z={e_z:.2e}")
+        assert max(e_urms, e_o1, e_o2, e_m, e_z) < 1e-5
+
+
 if __name__ == "__main__":
     assert os.path.isfile(HOST), "build runtime first: make -C runtime"
     check_tiny("f32", 1e-4)
@@ -704,6 +838,7 @@ if __name__ == "__main__":
     check_segment_and_autopin()
     check_round3_mechanisms_and_governor()
     check_round4_mechanisms_and_governor()
+    check_archived_c99_kenyon_header()
     print("C RUNTIME PARITY & VALIDATION TESTS PASSED")
 
 

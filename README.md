@@ -20,33 +20,33 @@ tags:
   - q4_0
 ---
 
-# VAULT v3 — 1.54B (Qwen2.5-1.5B-Instruct + Block Sliding-Window + Kenyon Vault + Segment Memory v2)
+# VAULT v3 — 1.54B (Qwen2.5-1.5B-Instruct + Block Sliding-Window + Segment Memory v2 + CAAI Governor)
 
 VAULT v3 is a deployment-oriented rework of VAULT, designed for **CPU-only and freestanding x86_64 (`-ffreestanding -nostdlib`, no libc, no heap)** inference. It addresses the review of VAULT v2.5 (irregular 981-tensor architecture, FP32-only Safetensors, JSON metadata, tokenizer artifacts, 180M capacity, no portable runtime).
 
 | | VAULT v2.5 (180M) | **VAULT v3 (1.54B)** |
 |---|---|---|
-| Architecture | Custom (Salience Binder, FFT bind, CMS, GTRM) | Standard GQA Transformer (RMSNorm, RoPE, SwiGLU) + block sliding window ($W=1024$, active $2W=2048$) + Kenyon Vault + `SegmentScorer v2` |
-| Tensors | 981 (~62/layer) | **485** (3 global + 6 `SegmentScorer v2` + 28 × 17/layer) |
+| Architecture | Custom (Salience Binder, FFT bind, CMS, GTRM) | Standard GQA Transformer (RMSNorm, RoPE, SwiGLU) + block sliding window ($W=1024$, active $2W=2048$) + auto-pinned sinks + `SegmentScorer v2` + `CAAIGovernor` |
+| Tensors | 981 (~62/layer) | **344** (2 global + 6 `SegmentScorer v2` + 28 × 12/layer; `338` without scorer) |
 | Weights shipped | FP32 Safetensors, 956.7 MB | **BF16 / Q8_0 / Hybrid Q4_0** in flat `VLT3` binary |
 | Metadata | 104 KB JSON header | Fixed 4,096 B C header, 128 B directory entries, 64 B alignment, CRC32 + SIMD scale integrity scan |
 | Tokenizer | SmolLM 49K (`<jupyter_code>`, `<gh_stars>`, …) | Qwen2.5 ChatML byte-level BPE (151,665) + UAX #15 NFC + dynamic >32 KB arena (`VTOK`) |
-| Inference state | framework-dependent | **Fixed $O(1)$ arena at any context length (552.9 MB C FP32 / 3.83 GiB GPU BF16 @ 100K), zero `malloc`** |
+| Inference state | framework-dependent | **Fixed $O(1)$ arena at any context length (310.4 MB C FP32 / ~3.6 GiB GPU BF16 @ 100K), zero `malloc`** |
 | Runtime | PyTorch only | **Freestanding C99 runtime (`-ffreestanding -nostdlib`, `<2 KB` stack frames, `0` external symbols)** + AVX2/FMA |
 
 ## What is in this repository
 
 | File | Size | Description |
 |---|---|---|
-| `vault_v3_1.5b_bf16.vlt3` | 3,104.3 MB | BF16 master weights (Kenyon Vault & `SegmentScorer v2` in F32; hosted on [Hugging Face](https://huggingface.co/batteryphil/VAULT-v3-1.5B)) |
-| `vault_v3_1.5b_q8_0.vlt3` | 1,657.2 MB | 8-bit blocks (32 weights + fp16 scale = 34 B; hosted on [Hugging Face](https://huggingface.co/batteryphil/VAULT-v3-1.5B)) |
-| `vault_v3_1.5b_q4_0.vlt3` | 1,022.5 MB | Hybrid 4-bit blocks (clipped-MSE `Q4_0` + `Q8_0` embeddings, layers `0, 1, 26, 27` `q_proj`/`o_proj`, and all `k_proj`/`v_proj`; hosted on [Hugging Face](https://huggingface.co/batteryphil/VAULT-v3-1.5B)) |
-| `vault_params/vault_v3_stage_a_best.pt` | 7.7 MB | Trained Kenyon Vault Stage-A tensors (PyTorch) |
+| `vault_v3_1.5b_bf16.vlt3` | 3,096.5 MB | BF16 master weights (`SegmentScorer v2` & norms/biases in F32; hosted on [Hugging Face](https://huggingface.co/batteryphil/VAULT-v3-1.5B)) |
+| `vault_v3_1.5b_q8_0.vlt3` | 1,649.4 MB | 8-bit blocks (32 weights + fp16 scale = 34 B; hosted on [Hugging Face](https://huggingface.co/batteryphil/VAULT-v3-1.5B)) |
+| `vault_v3_1.5b_q4_0.vlt3` | 1,014.8 MB | Hybrid 4-bit blocks (clipped-MSE `Q4_0` + `Q8_0` embeddings, layers `0, 1, 26, 27` `q_proj`/`o_proj`, and all `k_proj`/`v_proj`; hosted on [Hugging Face](https://huggingface.co/batteryphil/VAULT-v3-1.5B)) |
 | `vault_params/vault_v3_seg_scorer.pt` | 4.8 MB | Trained `SegmentScorer v2` MLP tensors (PyTorch; combine with Qwen2.5-1.5B-Instruct via `tools/export_vlt3.py`) |
+| `src/kenyon_cells.py`, `runtime/kenyon_cells_archive.h`, `vault_params/archive/vault_v3_stage_a_kenyon.pt` | 7.7 MB | **Archived** Co-Prime Kenyon Cell associative memory (PyTorch + freestanding C99 + Stage-A weights), preserved for future repurposing |
 | `runtime/` | — | `vault3.h`, `vault3.c` (`vault3_nfc_tables.h`, freestanding core), `vault3_host.c` (POSIX CLI / bench), `Makefile` |
-| `src/vault_v3_model.py` | — | PyTorch reference model (`forward == prefill+step == step == C99`, max `|Δlogit| ≤ 3.5e-5`, `100%` top-1 agreement) |
+| `src/vault_v3_model.py` | — | PyTorch reference model (`forward == prefill+step == step == C99`, max `|Δlogit| ≤ 3.6e-5`, `100%` top-1 agreement) |
 | `tools/` | — | `VLT3` reader/writer, clipped-MSE hybrid quantizer, exporter |
-| `tests/` | — | 4-way Python↔C parity, UAX #15 NFC & >32 KB BPE parity, corrupt/NaN rejection, `CAAIGovernor` tests |
+| `tests/` | — | 4-way Python↔C parity, UAX #15 NFC & >32 KB BPE parity, corrupt/NaN/legacy rejection, `CAAIGovernor` & archived Kenyon parity tests |
 | `docs/VAULT_v3_SPEC.md` | — | Full math, tensor table, byte-exact `VLT3`/`VTOK` layout, bare-metal porting guide |
 | `benchmarks/` | — | Raw JSON results and evaluation harnesses |
 
@@ -63,11 +63,21 @@ The runtime `mmap`s the file, validates the header, directory, tensor bounds/ali
 
 ## Architecture
 
-The 28-layer Qwen2.5-1.5B-Instruct backbone ($d=1536$, 12 query / 2 KV heads, $\text{head\_dim}=128$, SwiGLU $8960$) is kept **frozen**. Full causal attention is replaced by **block sliding-window attention** ($W=1024$, active window $2W=2048$; configurable down to $W=512$) coupled with three $O(1)$-memory mechanisms shared identically between `src/vault_v3_model.py` and freestanding `runtime/vault3.c`:
+The 28-layer Qwen2.5-1.5B-Instruct backbone ($d=1536$, 12 query / 2 KV heads, $\text{head\_dim}=128$, SwiGLU $8960$, `1,543,714,304` parameters) is kept **frozen** (`1,544,903,681` total parameters including `SegmentScorer v2`). Full causal attention is replaced by **block sliding-window attention** ($W=1024$, active window $2W=2048$; configurable down to $W=512$) coupled with three $O(1)$-memory mechanisms shared identically between `src/vault_v3_model.py` and freestanding `runtime/vault3.c`:
 
 1. **Auto-Pinned Sink Bank (`max_sink = 512`):** Retains BOS + the ChatML system prompt across arbitrary context lengths without RoPE drift.
-2. **Coherent Segment KV Memory (`seg_budget = 1024`, `seg_min = 16, seg_max = 48`):** A 2-layer `SegmentScorer v2` MLP reads layers `(8, 16, 24)` with causal APL feature habituation (`λ = 0.985`), 3-tier structural break detection (`.?!\n;`, JSON/pipe/TSV `},` / `",` / `|` / `\t`, CSV `,`), authority-spoofing quarantine, and turn-gated **2-tier FNV-1a shingle resonance** (Tier-A strict IDs + Tier-B pure-alphabetic content words with APL divisive surround inhibition, sub-clause isolation, orphan-value newline continuation halo, 2-band Hop-2 spreading activation across layers `7..15` → `16..25`, and indirect temporal rollback resolution) routed across a 3-way GQA head split (`2 free / 2 archival / 2 supersession` heads per KV group) with post-retrieval linear annealing (`gen_dist 18..38`).
-3. **Kenyon Vault Associative Memory (`13, 17, 19` co-prime banks, 49 cells/KV head):** Receives evicted tokens via delta-rule writes with per-cell overflow rescaling (`|z| ≤ 65,536`, verified over infinite horizons) and gated cosine reads.
+2. **Coherent Segment KV Memory (`seg_budget = 1024`, `seg_min = 16, seg_max = 48`):** A 2-layer `SegmentScorer v2` MLP (`1.19M` params) reads layers `(8, 16, 24)` with causal APL feature habituation (`λ = 0.985`), 3-tier structural break detection (`.?!\n;`, JSON/pipe/TSV `},` / `",` / `|` / `\t`, CSV `,`), authority-spoofing quarantine, and turn-gated **2-tier FNV-1a shingle resonance** (Tier-A strict IDs + Tier-B pure-alphabetic content words with APL divisive surround inhibition, sub-clause isolation, orphan-value newline continuation halo, 2-band Hop-2 spreading activation across layers `7..15` → `16..25`, and indirect temporal rollback resolution) routed across a 3-way GQA head split (`2 free / 2 archival / 2 supersession` heads per KV group) with post-retrieval linear annealing (`gen_dist 18..38`).
+3. **Constitutional Output Governor (`v3_governor` / `CAAIGovernor`):** Pre-sampling $O(1)$-arena finite-state logit filter enforcing system-prompt output prohibitions across literal, BPE-split, ZWSP, homoglyph, reversed, 4-phase Base64/Base64URL, and 2-phase Hex encodings.
+
+### Archived Co-Prime Kenyon Cell Modules (Saved for Future Repurposing)
+
+Because `SegmentScorer v2` + exact re-based KV segment retention + 2-tier shingle resonance carry 100% of `VAULT v3`'s multi-needle, multi-hop, and contradiction-resolution accuracy, the 28-layer Kenyon fast-weight matrices ($49 \times 128 \times 128$ per KV head) were removed from the active `VAULT v3` forward path — cutting checkpoint tensor count from `485 → 344` (`-141` tensors) and shrinking the fixed C99 FP32 state arena by **`242.5 MB` (`-43.9%`, `552.9 MB → 310.4 MB`)**.
+
+All Co-Prime Kenyon Cell implementations (`P = (13, 17, 19)`, sparse ternary LSH routing, chunkwise delta-rule write, homogeneous `|z| ≤ 65,536` infinite-stream rescaling, and bank-averaged normalized read) remain **saved and parity-tested** in the repository for future repurposing:
+* **PyTorch reference module:** `src/kenyon_cells.py` (tested in `tests/test_vault_v3.py`)
+* **Freestanding C99 (`-ffreestanding -nostdlib`) header:** `runtime/kenyon_cells_archive.h` (`0` external symbols, verified `max|Δ| < 1e-6` vs PyTorch in `tests/test_vlt3_runtime.py`)
+* **Stage-A distillation trainer & archived weights:** `train_vault_v3_stage_a.py` and `vault_params/archive/vault_v3_stage_a_kenyon.pt`
+* **Candidate repurposing roles:** (1) semantic / cross-lingual co-prime router for `k_seg` when surface words have zero lexical overlap, (2) Mushroom-Body Output Neuron (MBON) long-horizon familiarity & semantic deduplication sketch prior to `k_seg` admission, (3) final-layer tied-embedding $O(1)$ kNN logit cache, or (4) $O(1)$ CRT self-speculative CPU draft continuation table.
 
 ## Results
 
@@ -102,22 +112,22 @@ The 28-layer Qwen2.5-1.5B-Instruct backbone ($d=1536$, 12 query / 2 KV heads, $\
 | **Contradictory & Rollback Chains** (8K–10K evicted) | 3-stage latest, `[t=1]` archival, 5-stage, & indirect rollback to `[t=2]` | **6/6 (100%)** on all four |
 | **Scorer-Sponge DoS & 20× Same-ID Chaff** | Up to 120 sponges (explicit & casual needles, `B = 1024`) | **100% survived** |
 | **Packed Stream Formats** (`B = 1024`) | Minified JSON (`60` KV) / Pipe secret (`55` KV) / Zero-delim blob | **8/8 (100%)** / **8/8 (100%)** / **7/8 (87.5%)** |
-| **16K → 100.4K Token Horizon** (3.1× Qwen's 32K) | Dual needles (`10%` & `55%` depth), GPU BF16 | **8/8 (100%)**, flat **3.832–3.834 GiB** VRAM (`1,356 tok/s`) |
+| **16K → 100.4K Token Horizon** (3.1× Qwen's 32K) | Dual needles (`10%` & `55%` depth), GPU BF16 | **8/8 (100%)**, flat $O(1)$ VRAM |
 
-### 3. C runtime on CPU (AVX2+FMA, condvar thread pool + fused SwiGLU + parallel GQA)
+### 3. C runtime on CPU (AVX2+FMA, `310.4 MB` fixed state arena, condvar thread pool + fused SwiGLU + parallel GQA)
 
 | Format | File Size | 1T decode | 12T decode | 24T decode | Peak RSS |
 |---|---:|---:|---:|---:|---:|
-| **Hybrid Q4_0** | 1,022.5 MB | 5.93 tok/s | 41.87 tok/s (23.9 ms) | **45.76–46.16 tok/s (21.7 ms)** | **1.51 GB** (flat `1..64T`) |
-| **Q8_0** | 1,657.2 MB | 5.83 tok/s | 30.13 tok/s (33.2 ms) | **34.8+ tok/s** | **2.13 GB** |
-| **BF16** | 3,104.3 MB | 2.94 tok/s | 20.58 tok/s (48.6 ms) | **23.4+ tok/s** | **3.55 GB** |
+| **Hybrid Q4_0** | 1,014.8 MB | 6.04 tok/s | 39.54–41.87 tok/s (25.3 ms) | **45.71–46.18 tok/s (21.9 ms)** | **1.27 GB** (flat `1..64T`) |
+| **Q8_0** | 1,649.4 MB | 5.64 tok/s | 31.59 tok/s (31.7 ms) | **35.97 tok/s (27.8 ms)** | **1.88 GB** |
+| **BF16** | 3,096.5 MB | 2.85 tok/s | 20.45 tok/s (48.9 ms) | **22.0+ tok/s** | **3.26 GB** |
 
 ### 4. Correctness, sanitizer & security checks (all passing)
 
-* **4-Way Numerical Parity (`tests/test_vlt3_runtime.py`):** PyTorch `forward == prefill+step == step == C99` across `F32 / BF16 / Q8_0 / Q4_0` and all Round-4 2-hop, rollback, Tier-B, sub-clause, orphan-halo, and divisive-budget paths (`max |Δ| ≤ 3.50e-5`, **100% top-1 agreement**; `1T == 8T` `0.0` ULP bit-identical).
-* **Sanitizers:** Clean under `ASan + LSan + UBSan` (3,000-step stress with Kenyon cell rescaling, Hop-2, rollback, Tier-B, sub-clause refinement & `v3_governor`) and `ThreadSanitizer` (8-thread parallel GQA + SwiGLU).
+* **4-Way Numerical Parity (`tests/test_vlt3_runtime.py`):** PyTorch `forward == prefill+step == step == C99` across `F32 / BF16 / Q8_0 / Q4_0` and all Round-4 2-hop, rollback, Tier-B, sub-clause, orphan-halo, and divisive-budget paths (`max |Δ| ≤ 3.56e-5`, **100% top-1 agreement**; `1T == 8T` `0.0` ULP bit-identical), plus freestanding C99 ↔ PyTorch parity on `runtime/kenyon_cells_archive.h` (`max |Δ| ≤ 3.10e-7`).
+* **Sanitizers:** Clean under `ASan + LSan + UBSan` and `ThreadSanitizer` (8-thread parallel GQA + SwiGLU + Segment eviction + Hop-2 + `v3_governor`).
 * **`VTOK` Tokenizer:** 100% match with Hugging Face `AutoTokenizer` across arbitrary-length single pieces (`"!"*32769`, `" "*32769`, `1 MB` `"a"*1000000`), UAX #15 NFC normalization (`e\u0301`, Hangul Jamo, canonical combining-class reordering), and streaming 4-byte UTF-8 reassembly.
-* **Loader & OPI Governance:** `14/14` malformed or interior-`qNaN`/`-Inf` `.vlt3` files rejected (`rc = 2`) even without `--verify`; `0/12` GPU and `0/9` C `--chat` leaks across literal, ChatML-injected, indirect-JSON, concatenation-smuggled, separator-mutated (`SYS_CALL_EXEC`), zero-width, Greek/Cyrillic-homoglyph, character-reversed, 4-phase Base64/Base64URL, and 2-phase Hex (`0xNN` / `\xNN`) `SYSCALL_EXEC(` exfiltration vectors.
+* **Loader & OPI Governance:** Malformed, interior-`qNaN`/`-Inf`, and non-zero legacy `n_banks` `.vlt3` files deterministically rejected (`rc = 2`) even without `--verify`; `0` OPI governance leaks across literal, ChatML-injected, indirect-JSON, concatenation-smuggled, separator-mutated (`SYS_CALL_EXEC`), zero-width, Greek/Cyrillic-homoglyph, character-reversed, 4-phase Base64/Base64URL, and 2-phase Hex (`0xNN` / `\xNN`) `SYSCALL_EXEC(` exfiltration vectors.
 
 ## Intended use and scope
 
@@ -125,5 +135,5 @@ VAULT v3 is intended as a **natural-language / communication component** (e.g. i
 
 ## License and attribution
 
-* VAULT v3 architecture, Kenyon Vault, `SegmentScorer v2`, `VLT3`/`VTOK` formats and C runtime: © 2026 Philip Bartsch (batteryphil), **AGPL-3.0-or-later OR commercial license** (`LICENSE`, `LICENSE-AGPL-3.0`, `LICENSE-COMMERCIAL.md`).
+* VAULT v3 architecture, `SegmentScorer v2`, archived Kenyon Cell modules, `VLT3`/`VTOK` formats and C runtime: © 2026 Philip Bartsch (batteryphil), **AGPL-3.0-or-later OR commercial license** (`LICENSE`, `LICENSE-AGPL-3.0`, `LICENSE-COMMERCIAL.md`).
 * Backbone weights and tokenizer are derived from **[Qwen/Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct)** by the Qwen Team, Alibaba Cloud, licensed under **Apache-2.0** (`LICENSE-APACHE-2.0-Qwen`). Modifications are listed in `NOTICE_VAULT_v3.md`.

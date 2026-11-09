@@ -5,8 +5,9 @@
  * vault3.c — freestanding C99 inference runtime for VAULT v3. See vault3.h and docs/VAULT_v3_SPEC.md.
  *   - Zero libc, zero malloc, zero external math symbols (even without -fno-math-errno).
  *   - 64-bit overflow-checked header/shape/arena validation + NaN/Inf weight & scale detection.
- *   - Dynamic ChatML system-prompt pinning, Kenyon Vault with homogeneous cell rescaling,
- *     single-pass Segment-Evicted KV Memory, and O(n log n) min-heap byte-level BPE.
+ *   - Dynamic ChatML system-prompt pinning, single-pass Segment-Evicted KV Memory with
+ *     2-tier shingle resonance & Hop-2 / rollback / supersession, and O(n log n) min-heap BPE.
+ *   - Archived Co-Prime Kenyon Cell C99 kernels are preserved in runtime/kenyon_cells_archive.h.
  */
 #include "vault3.h"
 #include "vault3_nfc_tables.h"
@@ -113,12 +114,6 @@ static float v3_expf(float x) {
 }
 
 static float v3_sigmoid(float x) { return 1.0f / (1.0f + v3_expf(-x)); }
-static float v3_tanhf(float x) {
-    if (x > 9.0f) return 1.0f;
-    if (x < -9.0f) return -1.0f;
-    return 1.0f - 2.0f / (v3_expf(2.0f * x) + 1.0f);
-}
-static float v3_phi(float x) { return x > 0.0f ? x + 1.0f : v3_expf(x); } /* elu(x) + 1 */
 
 static float v3_erff(float x) { /* Abramowitz & Stegun 7.1.26, |err| <= 1.5e-7 */
     float z = x < 0.0f ? -x : x;
@@ -300,10 +295,12 @@ int v3_load(v3_model *m, const uint8_t *buf, uint64_t size, int verify_crc) {
     m->size = size;
     m->vocab_size = rd32(buf + 80); m->d_model = rd32(buf + 84); m->n_layers = rd32(buf + 88);
     m->n_heads = rd32(buf + 92); m->n_kv_heads = rd32(buf + 96); m->head_dim = rd32(buf + 100);
-    m->d_ff = rd32(buf + 104); m->window = rd32(buf + 108); m->n_banks = rd32(buf + 112);
-    for (int i = 0; i < V3_MAX_BANKS; i++) m->primes[i] = rd32(buf + 116 + 4 * i);
-    m->n_cells = rd32(buf + 148);
-    m->rms_eps = rdf32(buf + 152); m->rope_theta = rdf32(buf + 156); m->vault_eps = rdf32(buf + 160);
+    m->d_ff = rd32(buf + 104); m->window = rd32(buf + 108);
+    if (rd32(buf + 112) != 0u || rd32(buf + 148) != 0u) return V3_E_LIMIT;
+    for (int i = 0; i < 8; i++)
+        if (rd32(buf + 116 + 4 * i) != 0u) return V3_E_LIMIT;
+    m->rms_eps = rdf32(buf + 152); m->rope_theta = rdf32(buf + 156);
+    if (!is_finite_f32(rdf32(buf + 160))) return V3_E_NAN;
     m->bos_id = rd32(buf + 164); m->eos_id = rd32(buf + 168); m->im_start_id = rd32(buf + 172);
     m->im_end_id = rd32(buf + 176); m->pad_id = rd32(buf + 180); m->weight_format = rd32(buf + 184); m->flags = rd32(buf + 188);
     m->n_sink = rd32(buf + 256);
@@ -319,18 +316,12 @@ int v3_load(v3_model *m, const uint8_t *buf, uint64_t size, int verify_crc) {
         m->head_dim == 0 || m->head_dim > V3_MAX_HEAD_DIM || (m->head_dim & 1u) ||
         m->n_kv_heads == 0 || m->n_kv_heads > m->n_heads || (m->n_heads % m->n_kv_heads) != 0 ||
         m->d_ff == 0 || m->d_ff > 65536u || m->window == 0 || m->window > 65536u ||
-        m->n_banks == 0 || m->n_banks > V3_MAX_BANKS || m->n_sink > V3_MAX_SINK || m->n_sink > m->window)
+        m->n_sink > V3_MAX_SINK || m->n_sink > m->window)
         return V3_E_LIMIT;
     if ((uint64_t)m->n_heads * (uint64_t)m->head_dim != (uint64_t)m->d_model) return V3_E_SHAPE;
 
-    uint64_t csum = 0;
-    for (uint32_t b = 0; b < m->n_banks; b++) {
-        if (m->primes[b] == 0 || m->primes[b] > 4096u) return V3_E_LIMIT;
-        csum += m->primes[b];
-    }
-    if (csum != (uint64_t)m->n_cells || m->n_cells == 0 || m->n_cells > 4096u) return V3_E_LIMIT;
-    if (!is_finite_f32(m->rope_theta) || !is_finite_f32(m->rms_eps) || !is_finite_f32(m->vault_eps)) return V3_E_NAN;
-    if (!(m->rope_theta > 1.0f) || !(m->rms_eps > 0.0f) || !(m->vault_eps > 0.0f)) return V3_E_LIMIT;
+    if (!is_finite_f32(m->rope_theta) || !is_finite_f32(m->rms_eps)) return V3_E_NAN;
+    if (!(m->rope_theta > 1.0f) || !(m->rms_eps > 0.0f)) return V3_E_LIMIT;
     if (m->bos_id >= m->vocab_size || m->eos_id >= m->vocab_size || m->im_start_id >= m->vocab_size ||
         m->im_end_id >= m->vocab_size || m->pad_id >= m->vocab_size)
         return V3_E_LIMIT;
@@ -376,7 +367,6 @@ int v3_load(v3_model *m, const uint8_t *buf, uint64_t size, int verify_crc) {
         if (id < 256) {
             if (id == 1) dst = &m->embed;
             else if (id == 2) dst = &m->norm;
-            else if (id == 3) dst = &m->route;
             else if (m->seg_n_feat > 0) {
                 if (id == 4) dst = &m->seg_ln_w;
                 else if (id == 5) dst = &m->seg_ln_b;
@@ -394,8 +384,6 @@ int v3_load(v3_model *m, const uint8_t *buf, uint64_t size, int verify_crc) {
             case 4: dst = &L->wk; break;  case 5: dst = &L->bk; break; case 6: dst = &L->wv; break;
             case 7: dst = &L->bv; break;  case 8: dst = &L->wo; break; case 9: dst = &L->ln2; break;
             case 10: dst = &L->wg; break; case 11: dst = &L->wu; break; case 12: dst = &L->wd; break;
-            case 13: dst = &L->a_k; break; case 14: dst = &L->a_q; break; case 15: dst = &L->beta_w; break;
-            case 16: dst = &L->beta_b; break; case 17: dst = &L->alpha; break;
             default: dst = 0; break;
             }
         }
@@ -408,10 +396,9 @@ int v3_load(v3_model *m, const uint8_t *buf, uint64_t size, int verify_crc) {
     }
 
     /* shapes and dtypes (64-bit arithmetic) */
-    uint64_t d = m->d_model, H = m->n_heads, G = m->n_kv_heads, D = m->head_dim, F = m->d_ff, C = m->n_cells;
+    uint64_t d = m->d_model, H = m->n_heads, G = m->n_kv_heads, D = m->head_dim, F = m->d_ff;
     if (!expect_shape(&m->embed, 2, m->vocab_size, d, 0) || !is_matmul_dtype(&m->embed)) return V3_E_SHAPE;
     if (!expect_shape(&m->norm, 1, d, 0, 0) || !is_f32(&m->norm)) return V3_E_SHAPE;
-    if (!expect_shape(&m->route, 2, D, C, 0) || !is_f32(&m->route)) return V3_E_SHAPE;
     if (m->seg_n_feat > 0) {
         uint64_t fd = (uint64_t)m->seg_n_feat * d, hd = m->seg_hidden;
         if (!expect_shape(&m->seg_ln_w, 1, fd, 0, 0) || !is_f32(&m->seg_ln_w)) return V3_E_SHAPE;
@@ -435,11 +422,6 @@ int v3_load(v3_model *m, const uint8_t *buf, uint64_t size, int verify_crc) {
         if (!expect_shape(&L->bq, 1, H * D, 0, 0) || !is_f32(&L->bq)) return V3_E_SHAPE;
         if (!expect_shape(&L->bk, 1, G * D, 0, 0) || !is_f32(&L->bk)) return V3_E_SHAPE;
         if (!expect_shape(&L->bv, 1, G * D, 0, 0) || !is_f32(&L->bv)) return V3_E_SHAPE;
-        if (!expect_shape(&L->a_k, 3, G, D, D) || !is_f32(&L->a_k)) return V3_E_SHAPE;
-        if (!expect_shape(&L->a_q, 3, G, D, D) || !is_f32(&L->a_q)) return V3_E_SHAPE;
-        if (!expect_shape(&L->beta_w, 2, G, d, 0) || !is_f32(&L->beta_w)) return V3_E_SHAPE;
-        if (!expect_shape(&L->beta_b, 1, G, 0, 0) || !is_f32(&L->beta_b)) return V3_E_SHAPE;
-        if (!expect_shape(&L->alpha, 1, H, 0, 0) || !is_f32(&L->alpha)) return V3_E_SHAPE;
     }
 
     /* tokenizer blob */
@@ -677,16 +659,6 @@ static void rmsnorm(float *out, const float *x, const v3_tensor *w, uint32_t n, 
     for (uint32_t i = 0; i < n; i++) out[i] = g[i] * (x[i] * inv);
 }
 
-static void unit_rms(float *out, const float *x, uint32_t n) {
-    float inv = 1.0f / v3_sqrtf(dot_f32(x, x, n) / (float)n + 1e-6f);
-    for (uint32_t i = 0; i < n; i++) out[i] = x[i] * inv;
-}
-
-static void vecmat(float *out, const float *in, const float *A, uint32_t D) {
-    for (uint32_t e = 0; e < D; e++) out[e] = 0.0f;
-    for (uint32_t d0 = 0; d0 < D; d0++) axpy_f32(out, in[d0], A + (uint64_t)d0 * D, D);
-}
-
 static void rope_rotate(float *x, const float *cs, const float *sn, uint32_t D) {
     uint32_t h = D / 2;
     for (uint32_t i = 0; i < h; i++) {
@@ -702,22 +674,6 @@ static void rope_copy_rotate(float *dst, const float *src, const float *cs, cons
         float a = src[i], b = src[i + h];
         dst[i] = a * cs[i] - b * sn[i];
         dst[i + h] = b * cs[i] + a * sn[i];
-    }
-}
-
-static void route_cells(const v3_model *m, const float *x, uint32_t *cells) {
-    const float *R = (const float *)(const void *)m->route.data; /* [D][C] */
-    uint32_t D = m->head_dim, C = m->n_cells, off = 0;
-    for (uint32_t b = 0; b < m->n_banks; b++) {
-        uint32_t best = 0;
-        float bestv = 0.0f;
-        for (uint32_t j = 0; j < m->primes[b]; j++) {
-            float s = 0.0f;
-            for (uint32_t d0 = 0; d0 < D; d0++) s += x[d0] * R[(uint64_t)d0 * C + off + j];
-            if (j == 0 || s > bestv) { bestv = s; best = j; }
-        }
-        cells[b] = off + best;
-        off += m->primes[b];
     }
 }
 
@@ -754,7 +710,7 @@ static uint32_t compute_sink_cap(const v3_model *m) {
 }
 
 static int state_layout(v3_state *s, const v3_model *m, bump_t *b, uint32_t max_seg_budget) {
-    uint64_t G = m->n_kv_heads, W = m->window, D = m->head_dim, C = m->n_cells, H = m->n_heads, NB = m->n_banks;
+    uint64_t G = m->n_kv_heads, W = m->window, D = m->head_dim, H = m->n_heads;
     uint32_t sink_cap = compute_sink_cap(m);
     uint32_t seg_cap = (m->seg_n_feat > 0 && max_seg_budget > 0) ? max_seg_budget : 1u;
     uint64_t feat_dim = m->seg_n_feat > 0 ? (uint64_t)m->seg_n_feat * m->d_model : 1ull;
@@ -784,21 +740,15 @@ static int state_layout(v3_state *s, const v3_model *m, bump_t *b, uint32_t max_
         AL(l, k_prev, float, G * W * D); AL(l, k_cur, float, G * W * D);
         AL(l, v_prev, float, G * W * D); AL(l, v_cur, float, G * W * D);
         AL(l, kraw_prev, float, G * W * D); AL(l, kraw_cur, float, G * W * D);
-        AL(l, kt_prev, float, G * W * D); AL(l, kt_cur, float, G * W * D);
-        AL(l, b_prev, float, G * W); AL(l, b_cur, float, G * W);
-        AL(l, M, float, G * C * D * D); AL(l, z, float, G * C * D);
         AL(l, k_sink_raw, float, G * sink_cap * D); AL(l, k_sink, float, G * sink_cap * D); AL(l, v_sink, float, G * sink_cap * D);
         AL(l, k_seg_raw, float, G * seg_cap * D); AL(l, k_seg, float, G * seg_cap * D); AL(l, v_seg, float, G * seg_cap * D);
     }
     uint64_t att_stride = (uint64_t)sink_cap + seg_cap + 2ull * W + 64ull;
-    uint64_t tmp_stride = 4ull * D + 2ull * V3_MAX_BANKS;
-    A(x, float, m->d_model); A(xb, float, m->d_model); A(q, float, H * D); A(qraw, float, H * D);
+    A(x, float, m->d_model); A(xb, float, m->d_model); A(q, float, H * D);
     A(k, float, G * D); A(kraw, float, G * D); A(v, float, G * D);
     A(att, float, H * att_stride);
     A(ao, float, H * D); A(hb, float, m->d_ff); A(hb2, float, m->d_ff); A(logits, float, m->vocab_size);
-    A(tmp, float, H * tmp_stride);
     A(inv_freq, float, D / 2); A(cos_t, float, D / 2); A(sin_t, float, D / 2); A(cos_w, float, D / 2); A(sin_w, float, D / 2);
-    A(w_phk, float, W * D); A(w_delta, float, W * NB * D); A(w_cells, uint32_t, W * NB);
     A(tok_prev, uint32_t, W); A(tok_cur, uint32_t, W);
     A(sc_prev, float, W); A(sc_cur, float, W); A(seg_mx, float, W + 1ull);
     A(seg_prev, uint32_t, W); A(seg_cur, uint32_t, W);
@@ -842,7 +792,7 @@ static void zero_u32(uint32_t *p, uint64_t n) { for (uint64_t i = 0; i < n; i++)
 
 void v3_state_reset(v3_state *s) {
     const v3_model *m = s->m;
-    uint64_t G = m->n_kv_heads, W = m->window, D = m->head_dim, C = m->n_cells;
+    uint64_t G = m->n_kv_heads, W = m->window, D = m->head_dim;
     uint64_t scap = s->sink_cap > 0 ? s->sink_cap : 1ull;
     uint64_t bcap = s->seg_cap > 0 ? s->seg_cap : 1ull;
     uint64_t feat_dim = m->seg_n_feat > 0 ? (uint64_t)m->seg_n_feat * m->d_model : 1ull;
@@ -851,9 +801,6 @@ void v3_state_reset(v3_state *s) {
         zero_f(L->k_prev, G * W * D); zero_f(L->k_cur, G * W * D);
         zero_f(L->v_prev, G * W * D); zero_f(L->v_cur, G * W * D);
         zero_f(L->kraw_prev, G * W * D); zero_f(L->kraw_cur, G * W * D);
-        zero_f(L->kt_prev, G * W * D); zero_f(L->kt_cur, G * W * D);
-        zero_f(L->b_prev, G * W); zero_f(L->b_cur, G * W);
-        zero_f(L->M, G * C * D * D); zero_f(L->z, G * C * D);
         zero_f(L->k_sink_raw, G * scap * D); zero_f(L->k_sink, G * scap * D); zero_f(L->v_sink, G * scap * D);
         zero_f(L->k_seg_raw, G * bcap * D); zero_f(L->k_seg, G * bcap * D); zero_f(L->v_seg, G * bcap * D);
     }
@@ -884,7 +831,6 @@ int v3_state_init_ex(v3_state *s, const v3_model *m, void *arena, size_t arena_s
     uint8_t *sz = (uint8_t *)s;
     for (size_t i = 0; i < sizeof(*s); i++) sz[i] = 0;
     s->m = m;
-    s->vault_on = 1;
     s->seg_on = (m->seg_n_feat > 0 && max_seg_budget > 0) ? 1 : 0;
     s->auto_pin = 1;
     s->seg_budget = (m->seg_n_feat > 0) ? (m->seg_budget <= max_seg_budget ? m->seg_budget : max_seg_budget) : 0u;
@@ -982,78 +928,8 @@ int v3_set_seg_budget(v3_state *s, uint32_t budget) {
 }
 
 /* ============================================================================
- * Kenyon Vault + Segment-Evicted KV Memory
+ * Segment-Evicted KV Memory
  * ========================================================================== */
-static void vault_write_chunk(v3_state *s, v3_layer_state *L, uint32_t g, const float *kt, const float *v, const float *beta) {
-    const v3_model *m = s->m;
-    uint32_t W = m->window, D = m->head_dim, C = m->n_cells, NB = m->n_banks;
-    float *M = L->M + (uint64_t)g * C * D * D, *z = L->z + (uint64_t)g * C * D;
-    float eps = m->vault_eps;
-    for (uint32_t t = 0; t < W; t++) {
-        const float *kk = kt + (uint64_t)t * D;
-        float *ph = s->w_phk + (uint64_t)t * D;
-        for (uint32_t d0 = 0; d0 < D; d0++) ph[d0] = v3_phi(kk[d0]);
-        uint32_t *cells = s->w_cells + (uint64_t)t * NB;
-        route_cells(m, kk, cells);
-        for (uint32_t b = 0; b < NB; b++) {
-            const float *Mc = M + (uint64_t)cells[b] * D * D, *zc = z + (uint64_t)cells[b] * D;
-            float den = dot_f32(ph, zc, D);
-            float *dl = s->w_delta + ((uint64_t)t * NB + b) * D;
-            for (uint32_t e = 0; e < D; e++) dl[e] = 0.0f;
-            if (den > eps) {
-                for (uint32_t d0 = 0; d0 < D; d0++) axpy_f32(dl, ph[d0], Mc + (uint64_t)d0 * D, D);
-                float inv = 1.0f / den;
-                for (uint32_t e = 0; e < D; e++) dl[e] *= inv;
-            }
-            const float *vv = v + (uint64_t)t * D;
-            for (uint32_t e = 0; e < D; e++) dl[e] = beta[t] * (vv[e] - dl[e]);
-        }
-    }
-    for (uint32_t t = 0; t < W; t++) {
-        const float *ph = s->w_phk + (uint64_t)t * D;
-        const uint32_t *cells = s->w_cells + (uint64_t)t * NB;
-        for (uint32_t b = 0; b < NB; b++) {
-            float *Mc = M + (uint64_t)cells[b] * D * D, *zc = z + (uint64_t)cells[b] * D;
-            const float *dl = s->w_delta + ((uint64_t)t * NB + b) * D;
-            for (uint32_t d0 = 0; d0 < D; d0++) {
-                float a = ph[d0];
-                axpy_f32(Mc + (uint64_t)d0 * D, a, dl, D);
-                zc[d0] += beta[t] * a;
-            }
-        }
-    }
-    /* Homogeneous cell rescaling: M_c / z_c is scale-invariant, preventing fp32 saturation on >100M-token streams. */
-    for (uint32_t cell = 0; cell < C; cell++) {
-        float *zc = z + (uint64_t)cell * D;
-        float zmax = 0.0f;
-        for (uint32_t d0 = 0; d0 < D; d0++) if (zc[d0] > zmax) zmax = zc[d0];
-        if (zmax > 65536.0f) {
-            float *Mc = M + (uint64_t)cell * D * D;
-            for (uint32_t i = 0; i < D * D; i++) Mc[i] *= 0.5f;
-            for (uint32_t d0 = 0; d0 < D; d0++) zc[d0] *= 0.5f;
-        }
-    }
-}
-
-static void vault_read(const v3_state *s, const v3_layer_state *L, uint32_t g, const float *qt, float *out, float *phq) {
-    const v3_model *m = s->m;
-    uint32_t D = m->head_dim, C = m->n_cells, NB = m->n_banks;
-    const float *M = L->M + (uint64_t)g * C * D * D, *z = L->z + (uint64_t)g * C * D;
-    uint32_t cells[V3_MAX_BANKS];
-    for (uint32_t d0 = 0; d0 < D; d0++) phq[d0] = v3_phi(qt[d0]);
-    route_cells(m, qt, cells);
-    for (uint32_t e = 0; e < D; e++) out[e] = 0.0f;
-    for (uint32_t b = 0; b < NB; b++) {
-        const float *Mc = M + (uint64_t)cells[b] * D * D, *zc = z + (uint64_t)cells[b] * D;
-        float den = dot_f32(phq, zc, D);
-        if (!(den > m->vault_eps)) continue;
-        float inv = 1.0f / den;
-        for (uint32_t d0 = 0; d0 < D; d0++) axpy_f32(out, phq[d0] * inv, Mc + (uint64_t)d0 * D, D);
-    }
-    float invnb = 1.0f / (float)NB;
-    for (uint32_t e = 0; e < D; e++) out[e] *= invnb;
-}
-
 /* 3-tier byte-level structural + JSON/pipe/TSV + CSV/query delimiter segmenter:
  *   Tier 1 (break at >= seg_min): '\n' anywhere, or trailing '.!?;' (ignoring trailing ASCII ws)
  *   Tier 2 (break at >= max(seg_min, 2*seg_max/3)): '}', ']', '|', '\t', or '",' (minified JSON / pipe / TSV)
@@ -2081,12 +1957,10 @@ static void mlp_gu_run(void *arg, uint32_t r0, uint32_t r1) {
 
 typedef struct {
     v3_state *s;
-    const v3_layer *Lw;
     v3_layer_state *L;
-    uint64_t pos;
     uint32_t layer_idx;
     uint32_t n_sk, n_seg, n_prev, n_cur, n_tot;
-    uint64_t att_stride, tmp_stride;
+    uint64_t att_stride;
     float scale;
 } attn_task;
 
@@ -2094,14 +1968,12 @@ static void attn_run(void *arg, uint32_t h0, uint32_t h1) {
     const attn_task *t = (const attn_task *)arg;
     v3_state *s = t->s;
     const v3_model *m = s->m;
-    const v3_layer *Lw = t->Lw;
     v3_layer_state *L = t->L;
     uint32_t H = m->n_heads, G = m->n_kv_heads, D = m->head_dim, W = m->window;
     uint32_t grp = H / G;
     uint32_t free_h = grp / 3u;
     uint32_t sup_h = (grp - free_h) / 2u;
     uint32_t arch_end = grp - sup_h;
-    const float *alpha = (const float *)(const void *)Lw->alpha.data;
     uint32_t n_sk = t->n_sk, n_seg = t->n_seg, n_prev = t->n_prev, n_cur = t->n_cur, n_tot = t->n_tot;
     uint32_t l_lo = m->n_layers / 4u, l_mid = m->n_layers / 2u, l_hi = m->n_layers - (m->n_layers / 14u);
     int use_seg_bias = (s->seg_bias_active && n_seg > 0u && t->layer_idx >= l_lo && t->layer_idx < l_hi);
@@ -2115,10 +1987,7 @@ static void attn_run(void *arg, uint32_t h0, uint32_t h1) {
             else b_seg = (hr < arch_end) ? s->seg_bias_arch : s->seg_bias_sup;
         }
         float *att_h = s->att + (uint64_t)h * t->att_stride;
-        float *tmp_h = s->tmp + (uint64_t)h * t->tmp_stride;
-        float *qn = tmp_h, *qt = tmp_h + D, *mem = tmp_h + 2u * D, *phq = tmp_h + 3u * D;
         float *qh = s->q + (uint64_t)h * D;
-        copy_f32(qh, s->qraw + (uint64_t)h * D, D);
         rope_rotate(qh, s->cos_t, s->sin_t, D);
 
         float mx = -3.0e38f;
@@ -2159,16 +2028,6 @@ static void attn_run(void *arg, uint32_t h0, uint32_t h1) {
         for (uint32_t j = 0; j < n_seg; j++, idx++) axpy_f32(oh, att_h[idx] * inv, vm_g + (uint64_t)j * D, D);
         for (uint32_t j = 0; j < n_prev; j++, idx++) axpy_f32(oh, att_h[idx] * inv, vp_g + (uint64_t)j * D, D);
         for (uint32_t j = 0; j < n_cur; j++, idx++) axpy_f32(oh, att_h[idx] * inv, vc_g + (uint64_t)j * D, D);
-
-        if (s->vault_on && t->pos >= 2ull * W) {
-            float gate = v3_tanhf(alpha[h]);
-            if (gate != 0.0f) {
-                unit_rms(qn, s->qraw + (uint64_t)h * D, D);
-                vecmat(qt, qn, (const float *)(const void *)Lw->a_q.data + (uint64_t)g * D * D, D);
-                vault_read(s, L, g, qt, mem, phq);
-                axpy_f32(oh, gate, mem, D);
-            }
-        }
     }
 }
 
@@ -2215,38 +2074,23 @@ const float *v3_step(v3_state *s, uint32_t token) {
     }
 
     if (boundary) {
-        if (pos >= 2ull * W) {
+        if (pos >= 2ull * W && seg_active) {
             uint64_t ev_chunk_idx = pos / W - 2ull;
-            if (seg_active) {
-                int any_bad = 0;
-                for (uint32_t t = 0; t < W; t++) if (s->sc_prev[t] <= -1.0e29f) { any_bad = 1; break; }
-                if (any_bad) {
-                    for (uint32_t t = 0; t < W; t++) s->seg_mx[t] = 0.0f;
-                    for (uint32_t t = 0; t < W; t++) if (s->sc_prev[t] <= -1.0e29f) s->seg_mx[s->seg_prev[t]] = 1.0f;
-                    for (uint32_t t = 0; t < W; t++) {
-                        if (s->seg_mx[s->seg_prev[t]] > 0.5f) {
-                            s->sc_prev[t] = -1.0e30f;
-                            for (uint32_t l = 0; l < m->n_layers; l++)
-                                for (uint32_t g = 0; g < G; g++)
-                                    s->ls[l].b_prev[(uint64_t)g * W + t] = 0.0f;
-                        }
-                    }
+            int any_bad = 0;
+            for (uint32_t t = 0; t < W; t++) if (s->sc_prev[t] <= -1.0e29f) { any_bad = 1; break; }
+            if (any_bad) {
+                for (uint32_t t = 0; t < W; t++) s->seg_mx[t] = 0.0f;
+                for (uint32_t t = 0; t < W; t++) if (s->sc_prev[t] <= -1.0e29f) s->seg_mx[s->seg_prev[t]] = 1.0f;
+                for (uint32_t t = 0; t < W; t++) {
+                    if (s->seg_mx[s->seg_prev[t]] > 0.5f) s->sc_prev[t] = -1.0e30f;
                 }
             }
-            if (s->vault_on) {
-                for (uint32_t l = 0; l < m->n_layers; l++) {
-                    v3_layer_state *L = &s->ls[l];
-                    for (uint32_t g = 0; g < G; g++)
-                        vault_write_chunk(s, L, g, L->kt_prev + (uint64_t)g * W * D, L->v_prev + (uint64_t)g * W * D, L->b_prev + (uint64_t)g * W);
-                }
-            }
-            if (seg_active) update_segment_bank(s, ev_chunk_idx);
+            update_segment_bank(s, ev_chunk_idx);
         }
         for (uint32_t l = 0; l < m->n_layers; l++) {
             v3_layer_state *L = &s->ls[l];
             swapp_f(&L->k_prev, &L->k_cur); swapp_f(&L->v_prev, &L->v_cur);
             swapp_f(&L->kraw_prev, &L->kraw_cur);
-            swapp_f(&L->kt_prev, &L->kt_cur); swapp_f(&L->b_prev, &L->b_cur);
         }
         if (pos >= 2ull * W) {
             if (s->par_for && m->n_layers > 1u) s->par_for(s->par_ctx, kprev_rot_run, s, m->n_layers);
@@ -2289,10 +2133,8 @@ const float *v3_step(v3_state *s, uint32_t token) {
     }
 
     embed_row(s->x, &m->embed, token);
-    float *qn0 = s->tmp;
     uint32_t seg_cap_alloc = (m->seg_n_feat > 0 && s->seg_cap > 0) ? s->seg_cap : 1u;
     uint64_t att_stride = (uint64_t)s->sink_cap + seg_cap_alloc + 2ull * W + 64ull;
-    uint64_t tmp_stride = 4ull * D + 2ull * V3_MAX_BANKS;
     float scale = 1.0f / v3_sqrtf((float)D);
     uint32_t n_sk = (pos >= 2ull * W) ? s->n_pin : 0u;
     uint32_t n_seg = (pos >= 2ull * W && seg_active) ? s->mem_cnt : 0u;
@@ -2313,16 +2155,11 @@ const float *v3_step(v3_state *s, uint32_t token) {
         v3_layer_state *L = &s->ls[l];
 
         rmsnorm(s->xb, s->x, &Lw->ln1, d, m->rms_eps);
-        matvec(s, s->qraw, &Lw->wq, s->xb, &Lw->bq);
+        matvec(s, s->q, &Lw->wq, s->xb, &Lw->bq);
         matvec(s, s->kraw, &Lw->wk, s->xb, &Lw->bk);
         matvec(s, s->v, &Lw->wv, s->xb, &Lw->bv);
 
-        const float *bw = (const float *)(const void *)Lw->beta_w.data, *bb = (const float *)(const void *)Lw->beta_b.data;
         for (uint32_t g = 0; g < G; g++) {
-            float bl = bb[g] + dot_f32(bw + (uint64_t)g * d, s->xb, d);
-            L->b_cur[(uint64_t)g * W + c] = v3_sigmoid(bl);
-            unit_rms(qn0, s->kraw + (uint64_t)g * D, D);
-            vecmat(L->kt_cur + ((uint64_t)g * W + c) * D, qn0, (const float *)(const void *)Lw->a_k.data + (uint64_t)g * D * D, D);
             float *kr_dst = L->kraw_cur + ((uint64_t)g * W + c) * D;
             float *kc = L->k_cur + ((uint64_t)g * W + c) * D;
             float *vc = L->v_cur + ((uint64_t)g * W + c) * D;
@@ -2342,10 +2179,10 @@ const float *v3_step(v3_state *s, uint32_t token) {
         }
 
         attn_task at;
-        at.s = s; at.Lw = Lw; at.L = L; at.pos = pos; at.layer_idx = l;
+        at.s = s; at.L = L; at.layer_idx = l;
         at.n_sk = n_sk; at.n_seg = n_seg; at.n_prev = n_prev; at.n_cur = n_cur; at.n_tot = n_tot;
-        at.att_stride = att_stride; at.tmp_stride = tmp_stride; at.scale = scale;
-        if (s->par_for && H > 1u && (n_tot >= 96u || (s->vault_on && pos >= 2ull * W)))
+        at.att_stride = att_stride; at.scale = scale;
+        if (s->par_for && H > 1u && n_tot >= 96u)
             s->par_for(s->par_ctx, attn_run, &at, H);
         else
             attn_run(&at, 0, H);
@@ -2375,13 +2212,7 @@ const float *v3_step(v3_state *s, uint32_t token) {
             if (hab_sc > raw_sc) sc = raw_sc + 0.35f * (hab_sc - raw_sc);
         }
         s->sc_cur[c] = sc;
-    }
-
-    if (check_spoof_quarantine(s, pos, c)) {
-        if (seg_active) s->sc_cur[c] = -1.0e30f;
-        for (uint32_t l = 0; l < m->n_layers; l++)
-            for (uint32_t g = 0; g < G; g++)
-                s->ls[l].b_cur[(uint64_t)g * W + c] = 0.0f;
+        if (check_spoof_quarantine(s, pos, c)) s->sc_cur[c] = -1.0e30f;
     }
 
     rmsnorm(s->xb, s->x, &m->norm, d, m->rms_eps);

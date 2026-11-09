@@ -543,13 +543,21 @@ def load_vault_v3_loader(device: str):
     from train_vault_v3_stage_a import DEFAULT_QWEN
     with open(os.path.join(DEFAULT_QWEN, "config.json")) as f:
         qc = json.load(f)
-    cfg = VAULTv3Config.from_qwen_config(qc, window=1024)
+    seg_ck = os.path.join(ROOT_DIR, "dist", "hf_vault_v3", "vault_params", "vault_v3_seg_scorer.pt")
+    if not os.path.isfile(seg_ck):
+        seg_ck = os.path.join(ROOT_DIR, "vault_params", "vault_v3_seg_scorer.pt")
+    has_seg = os.path.isfile(seg_ck)
+    cfg = VAULTv3Config.from_qwen_config(
+        qc,
+        window=1024,
+        seg_budget=1024 if has_seg else 0,
+        seg_layers=(8, 16, 24) if has_seg else (),
+    )
     tok = AutoTokenizer.from_pretrained(DEFAULT_QWEN)
     m = VAULTv3ForCausalLM(cfg)
     load_qwen2_into_vault(m, DEFAULT_QWEN)
-    best_ck = os.path.join(ROOT_DIR, "checkpoints", "vault_v3_stage_a_best.pt")
-    if os.path.isfile(best_ck):
-        load_vault_params(m, best_ck)
+    if has_seg:
+        load_vault_params(m, seg_ck)
     m.lm_head = m.lm_logits
     return m.to(device, torch.bfloat16).eval(), tok
 

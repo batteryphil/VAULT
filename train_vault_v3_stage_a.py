@@ -3,8 +3,20 @@
 # Dual License: GNU AGPL-3.0-or-later (Free / Non-Profit / Open-Source) OR Commercial License
 # Copyright (c) 2026 Philip Bartsch (batteryphil)
 #
-# VAULT v3 — Stage A: Kenyon Vault memory recovery.
+# VAULT v3 — Stage A (ARCHIVED): Kenyon Vault memory recovery trainer + LongSequencePacker.
 #
+# ARCHIVE NOTE:
+#   Active VAULT v3 removed the per-layer Kenyon fast-weight matrices (saving ~245 MB of C99
+#   FP32 inference arena and 141 checkpoint tensors while retaining 100% long-context accuracy
+#   via SegmentScorer v2 + 2-tier shingle resonance + Hop-2/Rollback + Auto-Pinned Sinks).
+#   The standalone Co-Prime Kenyon Cell implementations are preserved in the repository for
+#   future repurposing:
+#     - PyTorch module : src/kenyon_cells.py
+#     - Freestanding C : runtime/kenyon_cells_archive.h
+#     - Trained weights: vault_params/archive/vault_v3_stage_a_kenyon.pt
+#   Note: LongSequencePacker and DEFAULT_QWEN in this file remain used by evaluation harnesses.
+#
+# Original Stage A setup:
 # The Qwen2.5 backbone is frozen. Only the Vault tensors (~1.9M params) train.
 # Teacher = the same frozen weights with FULL causal attention (KV cache grows with context).
 # Student = block sliding-window attention (fixed 2W KV ring) + Kenyon Vault (fixed cells).

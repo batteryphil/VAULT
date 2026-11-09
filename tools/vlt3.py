@@ -32,12 +32,11 @@ DTYPE_NAMES = {F32: "F32", F16: "F16", BF16: "BF16", Q8_0: "Q8_0", Q4_0: "Q4_0"}
 QK = 32  # block size for Q8_0 / Q4_0
 
 # tensor ids: (layer + 1) << 8 | kind for per-layer tensors, kind only for global tensors
-G_EMBED, G_NORM, G_ROUTE = 1, 2, 3
+G_EMBED, G_NORM = 1, 2
 G_SEG_LN_W, G_SEG_LN_B, G_SEG_W1, G_SEG_B1, G_SEG_W2, G_SEG_B2 = 4, 5, 6, 7, 8, 9
 GLOBAL_NAMES = {
     G_EMBED: "embed_tokens.weight",
     G_NORM: "norm.weight",
-    G_ROUTE: "vault_route",
     G_SEG_LN_W: "seg_scorer.ln.weight",
     G_SEG_LN_B: "seg_scorer.ln.bias",
     G_SEG_W1: "seg_scorer.fc1.weight",
@@ -54,16 +53,14 @@ L_KINDS = [
     "self_attn.o_proj.weight",
     "post_attention_layernorm.weight",
     "mlp.gate_proj.weight", "mlp.up_proj.weight", "mlp.down_proj.weight",
-    "self_attn.vault.a_k", "self_attn.vault.a_q",
-    "self_attn.vault.beta.weight", "self_attn.vault.beta.bias",
-    "self_attn.vault.alpha",
 ]
 L_KIND_ID = {n: i + 1 for i, n in enumerate(L_KINDS)}
 MATMUL_KINDS = {"self_attn.q_proj.weight", "self_attn.k_proj.weight", "self_attn.v_proj.weight",
                 "self_attn.o_proj.weight", "mlp.gate_proj.weight", "mlp.up_proj.weight", "mlp.down_proj.weight"}
 
 # header layout (little-endian). Offsets are part of the spec.
-# Bytes 260..295 hold optional Segment Memory config (0 in Kenyon-only files -> backward compatible).
+# Bytes 112..163 hold legacy Kenyon bank fields (all zero in Kenyon-free VLT3 files).
+# Bytes 260..295 hold Segment Memory config (0 in SWA+sinks-only files).
 _HDR_FMT = "<4sIII Q II QQQQQQ IIIIIIII I 8I I fff IIIII II 64s I IIIII 4I"
 _HDR_FIELDS = [
     "magic", "version", "header_size", "endian_tag",
@@ -330,7 +327,7 @@ def choose_dtype(name: str, fmt: str, n_layers: int = 0) -> int:
             if n_layers >= 8 and li in (0, 1, n_layers - 2, n_layers - 1) and kind in ("self_attn.q_proj.weight", "self_attn.o_proj.weight"):
                 return Q8_0
         return {"bf16": BF16, "q8_0": Q8_0, "q4_0": Q4_0}[fmt]
-    return F32  # norms, biases, vault tensors, routing projection (small)
+    return F32  # norms, biases, segment scorer LayerNorm/biases (small)
 
 
 def write_vlt3(path: str, state: Dict[str, torch.Tensor], cfg, tokenizer_dir: str, fmt: str, model_name: str = "VAULT-v3") -> Dict:
@@ -360,7 +357,7 @@ def write_vlt3(path: str, state: Dict[str, torch.Tensor], cfg, tokenizer_dir: st
         e["offset"] = cur
         cur += e["nbytes"]
     file_size = cur
-    primes = list(cfg.vault_primes) + [0] * (8 - len(cfg.vault_primes))
+    primes = [0] * 8
     seg_layers_raw = list(getattr(cfg, "seg_layers", ()) or ())
     seg_budget = int(getattr(cfg, "seg_budget", 0))
     has_sc = bool(seg_layers_raw) and ("seg_scorer.ln.weight" in state)
@@ -369,7 +366,7 @@ def write_vlt3(path: str, state: Dict[str, torch.Tensor], cfg, tokenizer_dir: st
     seg_hidden = int(getattr(cfg, "seg_hidden", 256)) if seg_n_feat > 0 else 0
     seg_min = int(getattr(cfg, "seg_min", 16)) if seg_n_feat > 0 else 0
     seg_max = int(getattr(cfg, "seg_max", 48)) if seg_n_feat > 0 else 0
-    flags = (1 if cfg.tie_embeddings else 0) | 2 | (4 if seg_n_feat > 0 else 0)
+    flags = (1 if cfg.tie_embeddings else 0) | (4 if seg_n_feat > 0 else 0)
     hdr_vals = dict(
         magic=MAGIC, version=VERSION, header_size=HEADER_SIZE, endian_tag=ENDIAN_TAG,
         file_size=file_size, alignment=ALIGN, n_tensors=len(entries),
@@ -377,8 +374,8 @@ def write_vlt3(path: str, state: Dict[str, torch.Tensor], cfg, tokenizer_dir: st
         data_offset=data_off, data_size=file_size - data_off,
         vocab_size=cfg.vocab_size, d_model=cfg.d_model, n_layers=cfg.n_layers, n_heads=cfg.n_heads,
         n_kv_heads=cfg.n_kv_heads, head_dim=cfg.head_dim, d_ff=cfg.d_ff, window=cfg.window,
-        n_banks=len(cfg.vault_primes), primes=primes, n_cells=cfg.n_cells,
-        rms_eps=cfg.rms_eps, rope_theta=cfg.rope_theta, vault_eps=cfg.vault_eps,
+        n_banks=0, primes=primes, n_cells=0,
+        rms_eps=cfg.rms_eps, rope_theta=cfg.rope_theta, vault_eps=0.0,
         bos_id=ids["bos"], eos_id=ids["eos"], im_start_id=ids["im_start"], im_end_id=ids["im_end"], pad_id=ids["pad"],
         weight_format={"f32": F32, "bf16": BF16, "q8_0": Q8_0, "q4_0": Q4_0}[fmt], flags=flags,
         model_name=model_name.encode("utf-8")[:63],
@@ -497,10 +494,10 @@ def read_vlt3(path: str, check_crc: bool = True) -> VLT3File:
         raise VLT3Error("inconsistent GQA/d_model dimensions")
     if h["n_sink"] > 512 or h["n_sink"] > h["window"]:
         raise VLT3Error("bad n_sink")
-    if not (0 < h["n_banks"] <= 8) or sum(h["primes"][: h["n_banks"]]) != h["n_cells"]:
-        raise VLT3Error("bad vault bank description")
+    if h["n_banks"] != 0 or h["n_cells"] != 0 or any(p != 0 for p in h["primes"]):
+        raise VLT3Error("bad vault bank description (expected 0 in Kenyon-free VLT3)")
     if not (np.isfinite(h["rms_eps"]) and h["rms_eps"] > 0 and np.isfinite(h["rope_theta"]) and h["rope_theta"] > 1.0
-            and np.isfinite(h["vault_eps"]) and h["vault_eps"] > 0):
+            and np.isfinite(h["vault_eps"])):
         raise VLT3Error("non-finite or invalid eps/theta")
     if h["seg_n_feat"] > 0:
         if h["seg_n_feat"] > 4 or not (0 < h["seg_hidden"] <= 1024) or not (0 < h["seg_min"] <= h["seg_max"] <= h["window"]):
@@ -540,7 +537,7 @@ def read_vlt3(path: str, check_crc: bool = True) -> VLT3File:
     for (a0, a1), (b0, _b1) in zip(spans, spans[1:]):
         if b0 < a1:
             raise VLT3Error("overlapping tensors")
-    need = {G_EMBED, G_NORM, G_ROUTE} | {((l + 1) << 8) | (j + 1) for l in range(h["n_layers"]) for j in range(len(L_KINDS))}
+    need = {G_EMBED, G_NORM} | {((l + 1) << 8) | (j + 1) for l in range(h["n_layers"]) for j in range(len(L_KINDS))}
     if h["seg_n_feat"] > 0:
         need |= {G_SEG_LN_W, G_SEG_LN_B, G_SEG_W1, G_SEG_B1, G_SEG_W2, G_SEG_B2}
     if need - seen:
@@ -560,7 +557,7 @@ def vlt3_config(vf: VLT3File):
         vocab_size=h["vocab_size"], d_model=h["d_model"], n_layers=h["n_layers"], n_heads=h["n_heads"],
         n_kv_heads=h["n_kv_heads"], head_dim=h["head_dim"], d_ff=h["d_ff"], rms_eps=h["rms_eps"],
         rope_theta=h["rope_theta"], tie_embeddings=bool(h["flags"] & 1), window=h["window"],
-        vault_primes=tuple(h["primes"][: h["n_banks"]]), vault_eps=h["vault_eps"], n_sink=h["n_sink"],
+        n_sink=h["n_sink"],
         seg_budget=h.get("seg_budget", 0) if nf > 0 else 0,
         seg_hidden=h.get("seg_hidden", 256) if nf > 0 else 256,
         seg_min=h.get("seg_min", 16) if nf > 0 else 16,

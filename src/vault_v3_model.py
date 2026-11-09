@@ -8,10 +8,12 @@
 #              Initialised from Qwen2.5-1.5B-Instruct (Apache-2.0, see NOTICE).
 #   Attention: block sliding window (chunk size W; active ring 2W) + dynamic system-prompt pinning
 #              (automatically pins ChatML <|im_start|>system...<|im_end|> turns up to max_sink)
-#              + optional fixed-budget Segment-Evicted KV Memory (exact softmax over top-B
-#              learned-scored segments in contiguous re-based RoPE space).
-#   Memory   : Kenyon Vault associative cells (co-prime LSH banks, chunkwise delta rule, cell
-#              rescaling guard for infinite streams) + Segment-Evicted KV Memory.
+#              + fixed-budget Segment-Evicted KV Memory (exact softmax over top-B learned-scored
+#              segments in contiguous re-based RoPE space, APL causal EMA habituation, 2-tier
+#              shingle resonance, Hop-2/Rollback bridging, and CAAI output governance).
+#
+# Note: The Co-Prime Kenyon Cell fast-weight modules are preserved for future repurposing in
+# src/kenyon_cells.py and runtime/kenyon_cells_archive.h.
 #
 # Everything here is built from matmul, argmax/topk, elementwise and norm ops so that the
 # exact same math runs in the freestanding C99 runtime (runtime/vault3.c).
@@ -51,11 +53,7 @@ class VAULTv3Config:
     im_start_id: int = 151644
     im_end_id: int = 151645
     system_tok_id: int = 8948
-    vault_primes: Tuple[int, ...] = (13, 17, 19)
-    vault_seed: int = 20261105
-    vault_density: float = 1.0 / 3.0         # fraction of non-zero entries in routing projection
-    vault_eps: float = 1e-6
-    # Optional Segment-Evicted KV Memory (0 = Kenyon-only; >0 = top-B exact KV segment bank)
+    # Fixed-budget Segment-Evicted KV Memory (0 = SWA+sinks only; >0 = top-B exact KV segment bank)
     seg_budget: int = 0
     seg_hidden: int = 256
     seg_min: int = 16
@@ -64,7 +62,7 @@ class VAULTv3Config:
 
     @property
     def n_cells(self) -> int:
-        return int(sum(self.vault_primes))
+        return 0
 
     @property
     def group_size(self) -> int:
@@ -76,15 +74,12 @@ class VAULTv3Config:
 
     def to_dict(self) -> dict:
         d = asdict(self)
-        d["vault_primes"] = list(self.vault_primes)
         d["seg_layers"] = list(self.seg_layers)
         return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "VAULTv3Config":
         d = {k: v for k, v in dict(d).items() if k in cls.__dataclass_fields__}
-        if "vault_primes" in d:
-            d["vault_primes"] = tuple(int(p) for p in d["vault_primes"])
         if "seg_layers" in d:
             d["seg_layers"] = tuple(int(l) for l in d["seg_layers"])
         return cls(**d)
@@ -955,161 +950,17 @@ def merge_segment_bank_indices(
 
 
 # ==============================================================================
-# Kenyon Vault memory
-# ==============================================================================
-
-VAULT_Z_RESCALE_MAX = 65536.0
-
-
-def make_vault_route(cfg: VAULTv3Config) -> torch.Tensor:
-    """Fixed random ternary projection (D, n_cells) in {-1, 0, +1}: fly-olfaction style LSH."""
-    g = torch.Generator().manual_seed(int(cfg.vault_seed))
-    D, C = cfg.head_dim, cfg.n_cells
-    u = torch.rand((D, C), generator=g)
-    half = cfg.vault_density / 2.0
-    route = torch.zeros((D, C))
-    route[u < half] = 1.0
-    route[(u >= half) & (u < cfg.vault_density)] = -1.0
-    for c in range(C):  # guarantee every column has at least one non-zero entry
-        if not route[:, c].any():
-            route[int(torch.randint(0, D, (1,), generator=g)), c] = 1.0
-    return route
-
-
-def _unit_rms(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
-    return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps)
-
-
-def _phi(x: torch.Tensor) -> torch.Tensor:
-    return F.elu(x) + 1.0
-
-
-def vault_route_cells(x: torch.Tensor, route: torch.Tensor, primes: Tuple[int, ...]) -> torch.Tensor:
-    """x: (..., D) -> (..., n_banks) global cell index (argmax within each co-prime bank)."""
-    logits = x @ route
-    idx = []
-    off = 0
-    for p in primes:
-        idx.append(logits[..., off: off + p].argmax(dim=-1) + off)
-        off += p
-    return torch.stack(idx, dim=-1)
-
-
-FAST_VAULT_MATMUL = False   # set True by trainers: bf16 tensor-core matmuls for the big Vault products (state stays fp32)
-
-
-def _mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    if FAST_VAULT_MATMUL and a.is_cuda:
-        return (a.to(torch.bfloat16) @ b.to(torch.bfloat16)).float()
-    return a @ b
-
-
-def vault_write(
-    M: torch.Tensor, z: torch.Tensor, kt: torch.Tensor, v: torch.Tensor, beta: torch.Tensor,
-    route: torch.Tensor, primes: Tuple[int, ...], eps: float,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Delta-rule write of one evicted chunk (all tokens use the pre-chunk state).
-    Includes homogeneous cell rescaling when z_max > 65536 so fp32 accumulators never saturate on >100M-token streams.
-    """
-    B, G, C, D, _ = M.shape
-    T = kt.shape[2]
-    NB = len(primes)
-    phk = _phi(kt)
-    cells = vault_route_cells(kt, route, primes)                          # (B, G, T, NB)
-    m_flat = M.permute(0, 1, 3, 2, 4).reshape(B, G, D, C * D)            # [d, c*D + e] = M_c[d, e]
-    num_all = _mm(phk, m_flat).view(B, G, T, C, D)
-    den_all = torch.einsum("bgtd,bgcd->bgtc", phk, z)
-    num = num_all.gather(3, cells[..., None].expand(B, G, T, NB, D))
-    den = den_all.gather(3, cells)
-    ok = den > eps
-    retr = torch.where(ok[..., None], num / den.clamp_min(eps)[..., None], torch.zeros_like(num))
-    delta = beta[..., None, None] * (v[..., None, :] - retr)              # (B, G, T, NB, D)
-    dense = torch.zeros((B, G, T, C, D), device=M.device, dtype=M.dtype).scatter(
-        3, cells[..., None].expand(B, G, T, NB, D), delta
-    )
-    upd = _mm(phk.transpose(-1, -2), dense.view(B, G, T, C * D))          # (B, G, D, C*D)
-    M_new = M + upd.view(B, G, D, C, D).permute(0, 1, 3, 2, 4)
-    w_cells = torch.zeros((B, G, T, C), device=M.device, dtype=M.dtype).scatter(
-        3, cells, beta[..., None].expand(B, G, T, NB)
-    )
-    z_new = z + torch.einsum("bgtc,bgtd->bgcd", w_cells, phk)
-    if not torch.is_grad_enabled():
-        big = z_new.amax(dim=-1) > VAULT_Z_RESCALE_MAX                    # (B, G, C)
-        if big.any():
-            scale = torch.where(big, 0.5, 1.0).to(M_new.dtype)
-            M_new = M_new * scale[..., None, None]
-            z_new = z_new * scale[..., None]
-    return M_new, z_new
-
-
-def vault_read(
-    M: torch.Tensor, z: torch.Tensor, qt: torch.Tensor, route: torch.Tensor, primes: Tuple[int, ...], eps: float,
-) -> torch.Tensor:
-    """qt: (B, G, R, T, D) -> (B, G, R, T, D): mean over banks of normalised cell reads."""
-    B, G, C, D, _ = M.shape
-    R, T = qt.shape[2], qt.shape[3]
-    phq = _phi(qt)
-    cells = vault_route_cells(qt, route, primes)                          # (B, G, R, T, NB)
-    m_flat = M.permute(0, 1, 3, 2, 4).reshape(B, G, 1, D, C * D)
-    num_all = _mm(phq, m_flat).view(B, G, R, T, C, D)
-    den_all = torch.einsum("bgrtd,bgcd->bgrtc", phq, z)
-    num = num_all.gather(4, cells[..., None].expand(B, G, R, T, len(primes), D))
-    den = den_all.gather(4, cells)
-    ok = den > eps
-    out = torch.where(ok[..., None], num / den.clamp_min(eps)[..., None], torch.zeros_like(num))
-    return out.mean(dim=-2)
-
-
-class KenyonVault(nn.Module):
-    """Per-layer trainable part of the Vault: 5 tensors."""
-
-    def __init__(self, cfg: VAULTv3Config):
-        super().__init__()
-        G, D = cfg.n_kv_heads, cfg.head_dim
-        self.a_k = nn.Parameter(torch.eye(D).repeat(G, 1, 1))     # (G, D, D) write-key adapter
-        self.a_q = nn.Parameter(torch.eye(D).repeat(G, 1, 1))     # (G, D, D) read-query adapter
-        self.beta = nn.Linear(cfg.d_model, G, bias=True)          # write strength
-        nn.init.zeros_(self.beta.weight)
-        nn.init.zeros_(self.beta.bias)
-        self.alpha = nn.Parameter(torch.zeros(cfg.n_heads))       # output gate (tanh), 0 = off
-
-    def keys(self, k: torch.Tensor) -> torch.Tensor:
-        """k: (B, G, L, D) pre-RoPE -> adapted float32 keys."""
-        return torch.einsum("bgld,gde->bgle", _unit_rms(k.float()), self.a_k.float())
-
-    def queries(self, q: torch.Tensor, group: int) -> torch.Tensor:
-        """q: (B, H, L, D) pre-RoPE -> (B, G, R, L, D) adapted float32 queries."""
-        B, H, L, D = q.shape
-        qg = _unit_rms(q.float()).view(B, H // group, group, L, D)
-        return torch.einsum("bgrld,gde->bgrle", qg, self.a_q.float())
-
-    def write_strength(self, h: torch.Tensor) -> torch.Tensor:
-        """h: (B, L, d_model) normed layer input -> (B, G, L) float32 in (0, 1)."""
-        return torch.sigmoid(F.linear(h.float(), self.beta.weight.float(), self.beta.bias.float())).transpose(1, 2)
-
-    def gate(self) -> torch.Tensor:
-        return torch.tanh(self.alpha.float())
-
-
-# ==============================================================================
 # Streaming state (fixed size, statically allocatable)
 # ==============================================================================
 
 class LayerState:
     def __init__(self, cfg: VAULTv3Config, batch: int, device, dtype, seg_budget: int = 0):
-        W, G, D, C = cfg.window, cfg.n_kv_heads, cfg.head_dim, cfg.n_cells
+        W, G, D = cfg.window, cfg.n_kv_heads, cfg.head_dim
         z = lambda *s, dt=dtype: torch.zeros(s, device=device, dtype=dt)
         # attention ring: [prev chunk | current chunk], post-RoPE keys (in re-based [0, 2W) frame), raw keys, and values
         self.k_prev, self.v_prev = z(batch, G, W, D), z(batch, G, W, D)
         self.k_cur, self.v_cur = z(batch, G, W, D), z(batch, G, W, D)
         self.kraw_prev, self.kraw_cur = z(batch, G, W, D), z(batch, G, W, D)
-        # pending Kenyon Vault writes for the same two chunks
-        self.kt_prev, self.vr_prev, self.b_prev = z(batch, G, W, D, dt=torch.float32), z(batch, G, W, D, dt=torch.float32), z(batch, G, W, dt=torch.float32)
-        self.kt_cur, self.vr_cur, self.b_cur = z(batch, G, W, D, dt=torch.float32), z(batch, G, W, D, dt=torch.float32), z(batch, G, W, dt=torch.float32)
-        # Kenyon Vault cells
-        self.M = z(batch, G, C, D, D, dt=torch.float32)
-        self.zc = z(batch, G, C, D, dt=torch.float32)
         # attention sinks: pre-RoPE raw keys and values up to max_sink (rotated when active)
         S_cap = max(1, cfg.n_sink, cfg.max_sink if cfg.auto_pin_system else cfg.n_sink)
         self.k_sink_raw, self.v_sink = z(batch, G, S_cap, D), z(batch, G, S_cap, D)
@@ -1186,7 +1037,6 @@ class VAULTv3Attention(nn.Module):
         self.k_proj = nn.Linear(d, G * D, bias=True)
         self.v_proj = nn.Linear(d, G * D, bias=True)
         self.o_proj = nn.Linear(H * D, d, bias=False)
-        self.vault = KenyonVault(cfg)
 
     def _qkv(self, h: torch.Tensor):
         B, L, _ = h.shape
@@ -1197,8 +1047,8 @@ class VAULTv3Attention(nn.Module):
         return q, k, v
 
     def forward(
-        self, h: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, route: torch.Tensor,
-        mode: str = "block", vault_on: bool = True, collect: Optional[dict] = None, n_pin: Optional[int] = None,
+        self, h: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor,
+        mode: str = "block", collect: Optional[dict] = None, n_pin: Optional[int] = None,
     ) -> torch.Tensor:
         cfg = self.cfg
         B, L, _ = h.shape
@@ -1213,53 +1063,16 @@ class VAULTv3Attention(nn.Module):
         else:
             attn = block_sliding_attention(qr, kr, v, W, k_raw=k, n_sink=S, head_dim=cfg.head_dim, rope_theta=cfg.rope_theta)
 
-        need_mem = vault_on and mode == "block" and (L > 2 * W or collect is not None)
-        if need_mem:
-            mem, M, zc, kt, beta = self._vault_sequence(h, q, k, v, route)
-            if L > 2 * W:
-                attn = attn + (self.vault.gate()[None, :, None, None] * mem).to(attn.dtype)
-            if collect is not None:
-                collect.update(dict(M=M, zc=zc, kt=kt, vr=v.float(), beta=beta, kr=kr, v=v, k=k))
-        elif collect is not None:
-            kt = self.vault.keys(k)
-            beta = self.vault.write_strength(h)
-            n_last = (L - 1) // W
-            M = torch.zeros((B, cfg.n_kv_heads, cfg.n_cells, cfg.head_dim, cfg.head_dim), device=h.device)
-            zc = torch.zeros((B, cfg.n_kv_heads, cfg.n_cells, cfg.head_dim), device=h.device)
-            for j in range(0, n_last - 1):
-                sl = slice(j * W, (j + 1) * W)
-                M, zc = vault_write(M, zc, kt[:, :, sl], v[:, :, sl].float(), beta[:, :, sl], route, cfg.vault_primes, cfg.vault_eps)
-            collect.update(dict(M=M, zc=zc, kt=kt, vr=v.float(), beta=beta, kr=kr, v=v, k=k))
+        if collect is not None:
+            collect.update(dict(kr=kr, v=v, k=k))
 
         out = attn.transpose(1, 2).reshape(B, L, cfg.n_heads * cfg.head_dim)
         return self.o_proj(out)
 
-    def _vault_sequence(self, h, q, k, v, route):
-        """Chunk-recurrent memory over a full sequence. Returns per-head read (B, H, L, D) and final state."""
-        cfg = self.cfg
-        B, H, L, D = q.shape
-        G, W, R = cfg.n_kv_heads, cfg.window, cfg.group_size
-        kt = self.vault.keys(k)                                 # (B, G, L, D)
-        qt = self.vault.queries(q, R)                           # (B, G, R, L, D)
-        beta = self.vault.write_strength(h)                     # (B, G, L)
-        vr = v.float()
-        n = (L + W - 1) // W
-        M = torch.zeros((B, G, cfg.n_cells, D, D), device=h.device, dtype=torch.float32)
-        zc = torch.zeros((B, G, cfg.n_cells, D), device=h.device, dtype=torch.float32)
-        outs = [torch.zeros((B, G, R, min(L, 2 * W), D), device=h.device, dtype=torch.float32)]
-        for i in range(2, n):
-            j = i - 2
-            sl_w = slice(j * W, (j + 1) * W)
-            M, zc = vault_write(M, zc, kt[:, :, sl_w], vr[:, :, sl_w], beta[:, :, sl_w], route, cfg.vault_primes, cfg.vault_eps)
-            sl_r = slice(i * W, min(L, (i + 1) * W))
-            outs.append(vault_read(M, zc, qt[:, :, :, sl_r], route, cfg.vault_primes, cfg.vault_eps))
-        mem = torch.cat(outs, dim=3).reshape(B, H, L, D)
-        return mem, M, zc, kt, beta
-
     @torch.no_grad()
     def step(
-        self, h: torch.Tensor, ls: LayerState, st: VAULTv3State, route: torch.Tensor,
-        vault_on: bool = True, seg_active: bool = False, layer_idx: int = 0,
+        self, h: torch.Tensor, ls: LayerState, st: VAULTv3State,
+        seg_active: bool = False, layer_idx: int = 0,
     ) -> torch.Tensor:
         """One-token recurrent step in re-based [-(S+M)..2W) RoPE coordinates (mirrors C v3_step)."""
         cfg = self.cfg
@@ -1274,9 +1087,6 @@ class VAULTv3Attention(nn.Module):
         ls.k_cur[:, :, c] = kr[:, :, 0].to(ls.k_cur.dtype)
         ls.v_cur[:, :, c] = v[:, :, 0].to(ls.v_cur.dtype)
         ls.kraw_cur[:, :, c] = k[:, :, 0].to(ls.kraw_cur.dtype)
-        ls.kt_cur[:, :, c] = self.vault.keys(k)[:, :, 0]
-        ls.vr_cur[:, :, c] = v[:, :, 0].float()
-        ls.b_cur[:, :, c] = self.vault.write_strength(h)[:, :, 0]
 
         S_cap = ls.k_sink_raw.shape[2]
         if pos < S_cap:
@@ -1325,10 +1135,6 @@ class VAULTv3Attention(nn.Module):
         else:
             attn = F.scaled_dot_product_attention(qr, kk_e, vv_e)
 
-        if vault_on and pos >= 2 * W:
-            qt = self.vault.queries(q, group)                    # (B, G, R, 1, D)
-            mem = vault_read(ls.M, ls.zc, qt, route, cfg.vault_primes, cfg.vault_eps).reshape(attn.shape)
-            attn = attn + (self.vault.gate()[None, :, None, None] * mem).to(attn.dtype)
         B = h.shape[0]
         return self.o_proj(attn.transpose(1, 2).reshape(B, 1, cfg.n_heads * D))
 
@@ -1352,8 +1158,8 @@ class VAULTv3Block(nn.Module):
         self.post_attention_layernorm = RMSNorm(cfg.d_model, cfg.rms_eps)
         self.mlp = VAULTv3MLP(cfg)
 
-    def forward(self, x, cos, sin, route, mode="block", vault_on=True, collect=None, n_pin=None):
-        x = x + self.self_attn(self.input_layernorm(x), cos, sin, route, mode=mode, vault_on=vault_on, collect=collect, n_pin=n_pin)
+    def forward(self, x, cos, sin, mode="block", collect=None, n_pin=None):
+        x = x + self.self_attn(self.input_layernorm(x), cos, sin, mode=mode, collect=collect, n_pin=n_pin)
         return x + self.mlp(self.post_attention_layernorm(x))
 
 
@@ -1364,7 +1170,6 @@ class VAULTv3ForCausalLM(nn.Module):
         self.embed_tokens = nn.Embedding(cfg.vocab_size, cfg.d_model)
         self.layers = nn.ModuleList([VAULTv3Block(cfg) for _ in range(cfg.n_layers)])
         self.norm = RMSNorm(cfg.d_model, cfg.rms_eps)
-        self.register_buffer("vault_route", make_vault_route(cfg), persistent=True)
         if len(cfg.seg_layers) > 0:
             self.seg_scorer: Optional[SegmentScorer] = SegmentScorer(len(cfg.seg_layers) * cfg.d_model, cfg.seg_hidden)
         else:
@@ -1403,16 +1208,16 @@ class VAULTv3ForCausalLM(nn.Module):
         return self._ema_mats
 
     # ---- parameter groups ----
-    def vault_parameters(self) -> List[nn.Parameter]:
-        return [p for n, p in self.named_parameters() if ".vault." in n]
+    def scorer_parameters(self) -> List[nn.Parameter]:
+        return [p for n, p in self.named_parameters() if n.startswith("seg_scorer.")]
 
     def backbone_parameters(self) -> List[nn.Parameter]:
-        return [p for n, p in self.named_parameters() if ".vault." not in n and not n.startswith("seg_scorer.")]
+        return [p for n, p in self.named_parameters() if not n.startswith("seg_scorer.")]
 
     def freeze_backbone(self) -> None:
         for p in self.backbone_parameters():
             p.requires_grad_(False)
-        for p in self.vault_parameters():
+        for p in self.scorer_parameters():
             p.requires_grad_(True)
 
     # ---- APL habituation, shingle resonance & authority-spoofing quarantine helpers ----
@@ -2012,6 +1817,8 @@ class VAULTv3ForCausalLM(nn.Module):
         return (b"opi_signed_directive" in buf) or (b"urgent opi delegation" in buf)
 
     def _apply_spoof_chunk(self, st: VAULTv3State, r0: int, tok_c_1d: List[int], seg_active: bool) -> None:
+        if not seg_active:
+            return
         cfg = self.cfg
         clen = len(tok_c_1d)
         if st.n_pin <= cfg.n_sink or r0 + clen <= st.n_pin:
@@ -2029,10 +1836,7 @@ class VAULTv3ForCausalLM(nn.Module):
                 hit_idx.append(j)
         if hit_idx:
             idx_t = torch.tensor(hit_idx, dtype=torch.long, device=st.sc_cur.device)
-            if seg_active:
-                st.sc_cur[0, idx_t] = -1.0e30
-            for ls in st.layers:
-                ls.b_cur[:, :, idx_t] = 0.0
+            st.sc_cur[0, idx_t] = -1.0e30
 
     # ---- streaming boundary rotation & eviction helpers ----
     def _refresh_prefix_rotations(self, st: VAULTv3State, seg_active: bool) -> None:
@@ -2051,84 +1855,74 @@ class VAULTv3ForCausalLM(nn.Module):
             for ls in st.layers:
                 ls.k_sink_rot[:, :, :S] = apply_rope(ls.k_sink_raw[:, :, :S], cs_s, sn_s)
 
-    def _advance_chunk_boundary(self, st: VAULTv3State, vault_on: bool, seg_active: bool) -> None:
+    def _advance_chunk_boundary(self, st: VAULTv3State, seg_active: bool) -> None:
         """Called at c == 0, pos > 0 BEFORE running token at st.pos."""
         cfg = self.cfg
         W = cfg.window
         pos = st.pos
-        route = self.vault_route.float()
         dev = self.embed_tokens.weight.device
 
-        if pos >= 2 * W:
+        if pos >= 2 * W and seg_active and st.seg_budget > 0:
             ev_chunk_idx = pos // W - 2
-            if seg_active and st.seg_budget > 0:
-                bad_tok = st.sc_prev[0] <= -1.0e29
-                if bool(bad_tok.any().item()):
-                    seg_ids_q = st.seg_prev_ids[0]
-                    n_loc_q = int(seg_ids_q.max().item()) + 1 if seg_ids_q.numel() else 0
-                    bad_seg = torch.zeros((max(1, n_loc_q),), device=dev, dtype=torch.bool)
-                    bad_seg.scatter_reduce_(0, seg_ids_q, bad_tok, "amax", include_self=True)
-                    seg_bad_mask = bad_seg[seg_ids_q]
-                    st.sc_prev[0, seg_bad_mask] = -1.0e30
-                    for ls in st.layers:
-                        ls.b_prev[:, :, seg_bad_mask] = 0.0
-            # 1. Kenyon Vault chunk write
-            if vault_on:
-                for ls in st.layers:
-                    ls.M, ls.zc = vault_write(ls.M, ls.zc, ls.kt_prev, ls.vr_prev, ls.b_prev, route, cfg.vault_primes, cfg.vault_eps)
-            # 2. Segment-Evicted KV Memory update (batch=1)
-            if seg_active and st.seg_budget > 0:
-                seg_ids_ev = st.seg_prev_ids[0]
-                n_loc = int(seg_ids_ev.max().item()) + 1 if seg_ids_ev.numel() else 0
-                mx = torch.full((max(1, n_loc),), float("-inf"), device=dev, dtype=torch.float32)
-                mx.scatter_reduce_(0, seg_ids_ev, st.sc_prev[0], "amax")
-                full_seg = seg_ids_ev + st.seg_id_offset
-                g_seg = full_seg % 16384
-                cand_all = mx[seg_ids_ev] - 1e-6 * g_seg.float()
-                st.seg_id_offset += n_loc
+            bad_tok = st.sc_prev[0] <= -1.0e29
+            if bool(bad_tok.any().item()):
+                seg_ids_q = st.seg_prev_ids[0]
+                n_loc_q = int(seg_ids_q.max().item()) + 1 if seg_ids_q.numel() else 0
+                bad_seg = torch.zeros((max(1, n_loc_q),), device=dev, dtype=torch.bool)
+                bad_seg[seg_ids_q[bad_tok]] = True
+                st.sc_prev[0, bad_seg[seg_ids_q]] = -1.0e30
 
-                t_start = st.n_pin if ev_chunk_idx == 0 else 0
-                if t_start < W:
-                    c_pos_all = torch.arange(ev_chunk_idx * W + t_start, (ev_chunk_idx + 1) * W, device=dev, dtype=torch.long)
-                    c_sc_all = cand_all[t_start:]
-                    c_tok_all = st.tok_prev[0, t_start:]
-                    c_seg_all = full_seg[t_start:]
-                    c_src_all = torch.arange(t_start, W, device=dev, dtype=torch.long)
-                    valid = c_sc_all > -1.0e29
-                    c_pos = c_pos_all[valid]
-                    c_sc = c_sc_all[valid]
-                    c_tok = c_tok_all[valid]
-                    c_seg = c_seg_all[valid]
-                    c_src = c_src_all[valid]
-                    keep_old, add_cand, st.mem_pos, st.mem_score = merge_segment_bank_indices(
-                        st.mem_pos, st.mem_score, c_pos, c_sc, st.seg_budget
-                    )
-                    n_keep = int(keep_old.numel())
-                    n_add = int(add_cand.numel())
-                    parts_tok = []
-                    parts_seg = []
+            # Segment-Evicted KV Memory update (batch=1)
+            seg_ids_ev = st.seg_prev_ids[0]
+            n_loc = int(seg_ids_ev.max().item()) + 1 if seg_ids_ev.numel() else 0
+            mx = torch.full((max(1, n_loc),), float("-inf"), device=dev, dtype=torch.float32)
+            mx.scatter_reduce_(0, seg_ids_ev, st.sc_prev[0], "amax")
+            full_seg = seg_ids_ev + st.seg_id_offset
+            g_seg = full_seg % 16384
+            cand_all = mx[seg_ids_ev] - 1e-6 * g_seg.float()
+            st.seg_id_offset += n_loc
+
+            t_start = st.n_pin if ev_chunk_idx == 0 else 0
+            if t_start < W:
+                c_pos_all = torch.arange(ev_chunk_idx * W + t_start, (ev_chunk_idx + 1) * W, device=dev, dtype=torch.long)
+                c_sc_all = cand_all[t_start:]
+                c_tok_all = st.tok_prev[0, t_start:]
+                c_seg_all = full_seg[t_start:]
+                c_src_all = torch.arange(t_start, W, device=dev, dtype=torch.long)
+                valid = c_sc_all > -1.0e29
+                c_pos = c_pos_all[valid]
+                c_sc = c_sc_all[valid]
+                c_tok = c_tok_all[valid]
+                c_seg = c_seg_all[valid]
+                c_src = c_src_all[valid]
+                keep_old, add_cand, st.mem_pos, st.mem_score = merge_segment_bank_indices(
+                    st.mem_pos, st.mem_score, c_pos, c_sc, st.seg_budget
+                )
+                n_keep = int(keep_old.numel())
+                n_add = int(add_cand.numel())
+                parts_tok = []
+                parts_seg = []
+                if n_keep > 0:
+                    parts_tok.append(st.mem_tok[keep_old])
+                    parts_seg.append(st.mem_seg[keep_old])
+                if n_add > 0:
+                    parts_tok.append(c_tok[add_cand])
+                    parts_seg.append(c_seg[add_cand])
+                st.mem_tok = torch.cat(parts_tok, dim=0) if parts_tok else torch.empty(0, dtype=torch.long, device=dev)
+                st.mem_seg = torch.cat(parts_seg, dim=0) if parts_seg else torch.empty(0, dtype=torch.long, device=dev)
+                src_new = c_src[add_cand]
+                for ls in st.layers:
                     if n_keep > 0:
-                        parts_tok.append(st.mem_tok[keep_old])
-                        parts_seg.append(st.mem_seg[keep_old])
+                        ls.k_seg_raw[:, :, :n_keep] = ls.k_seg_raw[:, :, keep_old].clone()
+                        ls.v_seg[:, :, :n_keep] = ls.v_seg[:, :, keep_old].clone()
                     if n_add > 0:
-                        parts_tok.append(c_tok[add_cand])
-                        parts_seg.append(c_seg[add_cand])
-                    st.mem_tok = torch.cat(parts_tok, dim=0) if parts_tok else torch.empty(0, dtype=torch.long, device=dev)
-                    st.mem_seg = torch.cat(parts_seg, dim=0) if parts_seg else torch.empty(0, dtype=torch.long, device=dev)
-                    src_new = c_src[add_cand]
-                    for ls in st.layers:
-                        if n_keep > 0:
-                            ls.k_seg_raw[:, :, :n_keep] = ls.k_seg_raw[:, :, keep_old].clone()
-                            ls.v_seg[:, :, :n_keep] = ls.v_seg[:, :, keep_old].clone()
-                        if n_add > 0:
-                            ls.k_seg_raw[:, :, n_keep : n_keep + n_add] = ls.kraw_prev[:, :, src_new]
-                            ls.v_seg[:, :, n_keep : n_keep + n_add] = ls.v_prev[:, :, src_new]
-                    self._rebuild_shingle_index(st)
+                        ls.k_seg_raw[:, :, n_keep : n_keep + n_add] = ls.kraw_prev[:, :, src_new]
+                        ls.v_seg[:, :, n_keep : n_keep + n_add] = ls.v_prev[:, :, src_new]
+                self._rebuild_shingle_index(st)
 
         # Shift cur -> prev and re-base k_prev by -W
         for ls in st.layers:
             ls.k_prev.copy_(ls.k_cur); ls.v_prev.copy_(ls.v_cur); ls.kraw_prev.copy_(ls.kraw_cur)
-            ls.kt_prev.copy_(ls.kt_cur); ls.vr_prev.copy_(ls.vr_cur); ls.b_prev.copy_(ls.b_cur)
             if pos >= 2 * W:
                 ls.k_prev.copy_(apply_rope(ls.k_prev, st.cos_neg_w.expand(W, -1), st.sin_neg_w.expand(W, -1)))
         st.tok_prev.copy_(st.tok_cur)
@@ -2142,7 +1936,7 @@ class VAULTv3ForCausalLM(nn.Module):
 
     # ---- single-pass chunk-recurrent forward for Segment Memory ----
     def _forward_chunk_recurrent(
-        self, input_ids: torch.Tensor, vault_on: bool = True, seg_budget: Optional[int] = None,
+        self, input_ids: torch.Tensor, seg_budget: Optional[int] = None,
         return_state: bool = False, last_only: bool = False,
     ) -> Tuple[torch.Tensor, Optional[VAULTv3State]]:
         cfg = self.cfg
@@ -2185,7 +1979,7 @@ class VAULTv3ForCausalLM(nn.Module):
                     st.n_pin = max(st.n_pin, limit_pin)
                 st.pin_locked = True
                 st.awaiting_sys_nl = False
-        route = self.vault_route.float()
+
         tier_lut = self._get_tier_lut() if seg_active else None
         t2 = max(cfg.seg_min, (cfg.seg_max * 2) // 3)
         t3 = max(cfg.seg_min, cfg.seg_max - 8 if cfg.seg_max > 8 else cfg.seg_min)
@@ -2205,7 +1999,7 @@ class VAULTv3ForCausalLM(nn.Module):
             clen = r1 - r0
             st.pos = r0
             if ci > 0:
-                self._advance_chunk_boundary(st, vault_on=vault_on, seg_active=seg_active)
+                self._advance_chunk_boundary(st, seg_active=seg_active)
 
             tok_c = input_ids[:, r0:r1]
             tok_c_1d = tok_c[0].tolist()
@@ -2260,9 +2054,6 @@ class VAULTv3ForCausalLM(nn.Module):
                 ls.k_cur[:, :, :clen] = kr.to(ls.k_cur.dtype)
                 ls.v_cur[:, :, :clen] = v.to(ls.v_cur.dtype)
                 ls.kraw_cur[:, :, :clen] = k.to(ls.kraw_cur.dtype)
-                ls.kt_cur[:, :, :clen] = a.vault.keys(k)
-                ls.vr_cur[:, :, :clen] = v.float()
-                ls.b_cur[:, :, :clen] = a.vault.write_strength(u)
 
                 S_cap = ls.k_sink_raw.shape[2]
                 if r0 < S_cap:
@@ -2301,11 +2092,6 @@ class VAULTv3ForCausalLM(nn.Module):
                     else:
                         attn = F.scaled_dot_product_attention(qr, kk_e, vv_e, attn_mask=cmask)
 
-                if vault_on and ci >= 2:
-                    qt = a.vault.queries(q, group)
-                    mem = vault_read(ls.M, ls.zc, qt, route, cfg.vault_primes, cfg.vault_eps).reshape(attn.shape)
-                    attn = attn + (a.vault.gate()[None, :, None, None] * mem).to(attn.dtype)
-
                 x = x + a.o_proj(attn.transpose(1, 2).reshape(B, clen, cfg.n_heads * D))
                 x = x + blk.mlp(blk.post_attention_layernorm(x))
 
@@ -2331,9 +2117,10 @@ class VAULTv3ForCausalLM(nn.Module):
 
     # ---- full-sequence forward ----
     def forward_hidden(
-        self, input_ids: torch.Tensor, mode: str = "block", vault_on: bool = True, pos0: int = 0,
+        self, input_ids: torch.Tensor, mode: str = "block", vault_on: bool = False, pos0: int = 0,
         seg_budget: Optional[int] = None,
     ) -> torch.Tensor:
+        _ = vault_on
         B, L = input_ids.shape
         bud = self.cfg.seg_budget if seg_budget is None else int(seg_budget)
         not_train = not (self.training and torch.is_grad_enabled())
@@ -2345,27 +2132,26 @@ class VAULTv3ForCausalLM(nn.Module):
             and (((self.seg_scorer is not None) and (bud > 0)) or (detect_pinned_prefix_len(input_ids[0], self.cfg) > self.cfg.n_sink))
         )
         if use_chunk_rec:
-            h, _ = self._forward_chunk_recurrent(input_ids, vault_on=vault_on, seg_budget=bud, return_state=False)
+            h, _ = self._forward_chunk_recurrent(input_ids, seg_budget=bud, return_state=False)
             return h
 
         n_pin = detect_pinned_prefix_len(input_ids[0], self.cfg) if B == 1 else self.cfg.n_sink
         x = self.embed_tokens(input_ids)
         pos = torch.arange(pos0, pos0 + L, device=input_ids.device)
         cos, sin = rope_cos_sin(pos, self.cfg.head_dim, self.cfg.rope_theta)
-        route = self.vault_route.float()
         use_ckpt = self.grad_checkpoint and self.training and torch.is_grad_enabled()
         for layer in self.layers:
             if use_ckpt:
-                x = torch.utils.checkpoint.checkpoint(layer, x, cos, sin, route, mode, vault_on, None, n_pin, use_reentrant=False)
+                x = torch.utils.checkpoint.checkpoint(layer, x, cos, sin, mode, None, n_pin, use_reentrant=False)
             else:
-                x = layer(x, cos, sin, route, mode=mode, vault_on=vault_on, n_pin=n_pin)
+                x = layer(x, cos, sin, mode=mode, n_pin=n_pin)
         return self.norm(x)
 
     def lm_logits(self, h: torch.Tensor) -> torch.Tensor:
         return F.linear(h, self.embed_tokens.weight)
 
     def forward(
-        self, input_ids: torch.Tensor, mode: str = "block", vault_on: bool = True, seg_budget: Optional[int] = None,
+        self, input_ids: torch.Tensor, mode: str = "block", vault_on: bool = False, seg_budget: Optional[int] = None,
     ) -> torch.Tensor:
         return self.lm_logits(self.forward_hidden(input_ids, mode=mode, vault_on=vault_on, seg_budget=seg_budget))
 
@@ -2376,25 +2162,25 @@ class VAULTv3ForCausalLM(nn.Module):
 
     @torch.no_grad()
     def prefill(
-        self, input_ids: torch.Tensor, vault_on: bool = True, seg_budget: Optional[int] = None,
+        self, input_ids: torch.Tensor, vault_on: bool = False, seg_budget: Optional[int] = None,
     ) -> Tuple[torch.Tensor, VAULTv3State]:
         """Parallel prefill from position 0. Returns last-token logits (B, V) and exact streaming state."""
+        _ = vault_on
         B, L = input_ids.shape
         bud = self.cfg.seg_budget if seg_budget is None else int(seg_budget)
         if B == 1:
             h, st = self._forward_chunk_recurrent(
-                input_ids, vault_on=vault_on, seg_budget=bud, return_state=True, last_only=True,
+                input_ids, seg_budget=bud, return_state=True, last_only=True,
             )
             return self.lm_logits(h)[:, 0], st
 
-        # Batch > 1 Kenyon-only prefill
+        # Batch > 1 sliding-window + sink prefill
         cfg = self.cfg
         W = cfg.window
         st = self.new_state(B, seg_budget=0)
         st.set_pinned(cfg.n_sink)
         x = self.embed_tokens(input_ids)
         cos, sin = rope_cos_sin(torch.arange(L, device=input_ids.device), cfg.head_dim, cfg.rope_theta)
-        route = self.vault_route.float()
         last = (L - 1) // W
         cnt = L - last * W
         st.tok_cur[:, :cnt] = input_ids[:, last * W : L]
@@ -2405,8 +2191,7 @@ class VAULTv3ForCausalLM(nn.Module):
         cos_p, sin_p = rope_cos_sin(torch.arange(W, device=input_ids.device), cfg.head_dim, cfg.rope_theta)
         for layer, ls in zip(self.layers, st.layers):
             col: Dict[str, torch.Tensor] = {}
-            x = layer(x, cos, sin, route, mode="block", vault_on=vault_on, collect=col, n_pin=st.n_pin)
-            ls.M.copy_(col["M"]); ls.zc.copy_(col["zc"])
+            x = layer(x, cos, sin, mode="block", collect=col, n_pin=st.n_pin)
             ns = min(st.n_pin, L)
             if ns > 0:
                 ls.k_sink_raw[:, :, :ns] = col["k"][:, :, :ns].to(ls.k_sink_raw.dtype)
@@ -2415,15 +2200,11 @@ class VAULTv3ForCausalLM(nn.Module):
             ls.k_cur[:, :, :cnt] = apply_rope(col["k"][:, :, cur], cos_c, sin_c).to(ls.k_cur.dtype)
             ls.v_cur[:, :, :cnt] = col["v"][:, :, cur].to(ls.v_cur.dtype)
             ls.kraw_cur[:, :, :cnt] = col["k"][:, :, cur].to(ls.kraw_cur.dtype)
-            ls.kt_cur[:, :, :cnt] = col["kt"][:, :, cur]
-            ls.vr_cur[:, :, :cnt] = col["vr"][:, :, cur]
-            ls.b_cur[:, :, :cnt] = col["beta"][:, :, cur]
             if last >= 1:
                 prv = slice((last - 1) * W, last * W)
                 ls.k_prev.copy_(apply_rope(col["k"][:, :, prv], cos_p, sin_p).to(ls.k_prev.dtype))
                 ls.v_prev.copy_(col["v"][:, :, prv])
                 ls.kraw_prev.copy_(col["k"][:, :, prv].to(ls.kraw_prev.dtype))
-                ls.kt_prev.copy_(col["kt"][:, :, prv]); ls.vr_prev.copy_(col["vr"][:, :, prv]); ls.b_prev.copy_(col["beta"][:, :, prv])
         st.pos = L
         if L >= 2 * W:
             self._refresh_prefix_rotations(st, seg_active=False)
@@ -2431,8 +2212,9 @@ class VAULTv3ForCausalLM(nn.Module):
         return self.lm_logits(h)[:, 0], st
 
     @torch.no_grad()
-    def step(self, token_ids: torch.Tensor, st: VAULTv3State, vault_on: bool = True) -> torch.Tensor:
+    def step(self, token_ids: torch.Tensor, st: VAULTv3State, vault_on: bool = False) -> torch.Tensor:
         """token_ids: (B,) -> logits (B, V). Fixed-size state; no growth with context."""
+        _ = vault_on
         cfg = self.cfg
         W = cfg.window
         pos = st.pos
@@ -2470,7 +2252,7 @@ class VAULTv3ForCausalLM(nn.Module):
                 st.awaiting_sys_nl = False
 
         if c == 0 and pos > 0:
-            self._advance_chunk_boundary(st, vault_on=vault_on, seg_active=seg_active)
+            self._advance_chunk_boundary(st, seg_active=seg_active)
 
         st.tok_cur[:, c] = token_ids
         if seg_active:
@@ -2501,12 +2283,11 @@ class VAULTv3ForCausalLM(nn.Module):
             st.seg_head_bias_hop1 = None
 
         x = self.embed_tokens(token_ids)[:, None]
-        route = self.vault_route.float()
         for li, (layer, ls) in enumerate(zip(self.layers, st.layers)):
             if seg_active and li in feat_map:
                 feats[feat_map[li]] = x[0, 0].float()
             x = x + layer.self_attn.step(
-                layer.input_layernorm(x), ls, st, route, vault_on=vault_on, seg_active=seg_active, layer_idx=li
+                layer.input_layernorm(x), ls, st, seg_active=seg_active, layer_idx=li
             )
             x = x + layer.mlp(layer.post_attention_layernorm(x))
 
@@ -2523,11 +2304,8 @@ class VAULTv3ForCausalLM(nn.Module):
                 sc = raw_sc + 0.35 * F.relu(hab_sc - raw_sc)
             st.sc_cur[0, c] = sc
 
-        if token_ids.shape[0] == 1 and self._check_spoof_step(st, pos, c):
-            if seg_active:
+            if token_ids.shape[0] == 1 and self._check_spoof_step(st, pos, c):
                 st.sc_cur[0, c] = -1.0e30
-            for ls in st.layers:
-                ls.b_cur[:, :, c] = 0.0
 
         st.pos = pos + 1
         return self.lm_logits(self.norm(x))[:, 0]
@@ -2538,7 +2316,7 @@ class VAULTv3ForCausalLM(nn.Module):
 # ==============================================================================
 
 def load_qwen2_into_vault(model: VAULTv3ForCausalLM, qwen_dir: str) -> None:
-    """Copy Qwen2 safetensors weights into the VAULT v3 backbone (vault & scorer params keep their init)."""
+    """Copy Qwen2 safetensors weights into the VAULT v3 backbone (scorer params keep their init)."""
     import glob
     from safetensors.torch import load_file
 
@@ -2552,7 +2330,7 @@ def load_qwen2_into_vault(model: VAULTv3ForCausalLM, qwen_dir: str) -> None:
         nk = k[len("model."):] if k.startswith("model.") else k
         mapped[nk] = v
     missing, unexpected = model.load_state_dict(mapped, strict=False)
-    missing = [m for m in missing if ".vault." not in m and m != "vault_route" and not m.startswith("seg_scorer.")]
+    missing = [m for m in missing if not m.startswith("seg_scorer.")]
     if missing or unexpected:
         raise RuntimeError(f"Qwen2 load mismatch: missing={missing[:8]} unexpected={unexpected[:8]}")
 
@@ -2566,9 +2344,9 @@ def save_vault_v3(model: VAULTv3ForCausalLM, path: str, extra: Optional[dict] = 
 
 
 def save_vault_params(model: VAULTv3ForCausalLM, path: str, extra: Optional[dict] = None) -> None:
-    """Small checkpoint with only the trainable Vault tensors (backbone = unchanged Qwen weights)."""
-    sd = {k: v.detach().cpu() for k, v in model.state_dict().items() if ".vault." in k or k == "vault_route"}
-    payload = {"format": "vault_v3_vault_only", "config": model.cfg.to_dict(), "vault_state": sd}
+    """Small checkpoint with only the trainable VAULT v3 SegmentScorer tensors."""
+    sd = {k: v.detach().cpu() for k, v in model.state_dict().items() if k.startswith("seg_scorer.")}
+    payload = {"format": "vault_v3_scorer_only", "config": model.cfg.to_dict(), "vault_state": sd}
     if extra:
         payload.update(extra)
     torch.save(payload, path + ".tmp")
@@ -2576,9 +2354,18 @@ def save_vault_params(model: VAULTv3ForCausalLM, path: str, extra: Optional[dict
 
 
 def load_vault_params(model: VAULTv3ForCausalLM, path: str) -> dict:
-    """Load trainable Vault parameters from a checkpoint into model."""
+    """Load trainable VAULT v3 auxiliary parameters (e.g. SegmentScorer) from a checkpoint into model."""
     ck = torch.load(path, map_location="cpu", weights_only=False)
-    state = ck.get("vault_state", ck.get("model_state", ck))
-    missing, unexpected = model.load_state_dict(state, strict=False)
+    raw = ck.get("vault_state", ck.get("model_state", ck.get("state", ck)))
+    remap = {
+        "net.0.weight": "seg_scorer.ln.weight", "net.0.bias": "seg_scorer.ln.bias",
+        "net.1.weight": "seg_scorer.fc1.weight", "net.1.bias": "seg_scorer.fc1.bias",
+        "net.3.weight": "seg_scorer.fc2.weight", "net.3.bias": "seg_scorer.fc2.bias",
+        "ln.weight": "seg_scorer.ln.weight", "ln.bias": "seg_scorer.ln.bias",
+        "fc1.weight": "seg_scorer.fc1.weight", "fc1.bias": "seg_scorer.fc1.bias",
+        "fc2.weight": "seg_scorer.fc2.weight", "fc2.bias": "seg_scorer.fc2.bias",
+    }
+    state = {remap.get(k, k): v for k, v in raw.items() if ".vault." not in k and k != "vault_route"}
+    _, unexpected = model.load_state_dict(state, strict=False)
     assert not unexpected, f"Unexpected keys: {unexpected}"
-    return {k: v for k, v in ck.items() if k not in ("vault_state", "model_state", "optimizer")}
+    return {k: v for k, v in ck.items() if k not in ("vault_state", "model_state", "state", "optimizer")}

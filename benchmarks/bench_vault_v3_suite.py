@@ -52,15 +52,14 @@ from vlt3 import read_vlt3, vlt3_to_state_dict  # noqa: E402
 
 def memory_scaling_table(cfg: VAULTv3Config) -> List[Dict[str, Any]]:
     """Compare standard Qwen2.5-1.5B FP16/BF16 KV cache growth vs VAULT v3 fixed C99 FP32 / GPU BF16 state."""
-    L_layers, G, D, W, C, S = cfg.n_layers, cfg.n_kv_heads, cfg.head_dim, cfg.window, cfg.n_cells, cfg.n_sink
+    L_layers, G, D, W, S, B_seg = cfg.n_layers, cfg.n_kv_heads, cfg.head_dim, cfg.window, cfg.max_sink, cfg.seg_budget
     # Standard GQA KV cache in BF16: 2 (K+V) * n_layers * G * seq_len * D * 2 bytes
     # VAULT v3 C99 freestanding FP32 state per layer:
-    #   KV ring (2 chunks * 2 * G * W * D * 4) + pending Vault ring (2 * G * W * (D + 1) * 4)
-    #   + Kenyon cells (G * C * (D*D + D) * 4) + sinks (2 * G * S * D * 4)
-    per_layer_c_f32 = G * (4 * W * D + 2 * W * (D + 1) + C * (D * D + D) + 2 * S * D) * 4
+    #   KV + pre-RoPE ring (6 * G * W * D * 4) + sinks (3 * G * S * D * 4) + Segment KV bank (3 * G * B_seg * D * 4)
+    per_layer_c_f32 = G * (6 * W * D + 3 * S * D + 3 * B_seg * D) * 4
     c_fixed_mb = (L_layers * per_layer_c_f32) / 1e6
-    # GPU BF16 KV ring + FP32 Kenyon cells:
-    per_layer_gpu = G * (4 * W * D * 2 + 2 * S * D * 2 + 2 * W * (2 * D + 1) * 4 + C * (D * D + D) * 4)
+    # GPU BF16 KV ring + sinks + Segment KV bank:
+    per_layer_gpu = G * (6 * W * D + 3 * S * D + 3 * B_seg * D) * 2
     gpu_fixed_mb = (L_layers * per_layer_gpu) / 1e6
     rows = []
     for ctx in (2048, 4096, 8192, 16384, 32768, 65536, 131072):
@@ -91,7 +90,7 @@ def eval_long_context_and_quant(
     W = base_model.cfg.window
     base_model.eval()
 
-    def _eval_one(m: VAULTv3ForCausalLM, mode: str, vault_on: bool, ref_logits: List[torch.Tensor] = None, save_ref: bool = False):
+    def _eval_one(m: VAULTv3ForCausalLM, mode: str, seg_budget: int, ref_logits: List[torch.Tensor] = None, save_ref: bool = False):
         ce_all = [0.0, 0]
         ce_by_src: Dict[str, List[float]] = {}
         retr = [0, 0]
@@ -102,7 +101,7 @@ def eval_long_context_and_quant(
         for idx, (row, spans, src) in enumerate(eval_rows):
             x = row[:-1].unsqueeze(0).to(device)
             y = row[1:].to(device)
-            h = m.forward_hidden(x, mode=mode, vault_on=vault_on)
+            h = m.forward_hidden(x, mode=mode, seg_budget=seg_budget)
             ce_by_src.setdefault(src, [0.0, 0])
             for a in range(2 * W, h.shape[1], 1024):
                 b = min(h.shape[1], a + 1024)
@@ -142,13 +141,14 @@ def eval_long_context_and_quant(
             out["top1_agreement_vs_bf16"] = round(top1_eq[0] / top1_eq[1], 4)
         return out, collected
 
+    bud = base_model.cfg.seg_budget
     results: Dict[str, Any] = {}
     print("[suite] evaluating Full-Attention upper bound...", flush=True)
-    results["qwen_full_attn_bf16"], _ = _eval_one(base_model, "full", False)
-    print("[suite] evaluating SWA-Only baseline (vault_on=False)...", flush=True)
-    results["swa_only_bf16"], _ = _eval_one(base_model, "block", False)
-    print("[suite] evaluating VAULT v3 BF16 master...", flush=True)
-    results["vault_v3_bf16"], ref_lg = _eval_one(base_model, "block", True, save_ref=True)
+    results["qwen_full_attn_bf16"], _ = _eval_one(base_model, "full", 0)
+    print("[suite] evaluating SWA-Only baseline (seg_budget=0)...", flush=True)
+    results["swa_only_bf16"], _ = _eval_one(base_model, "block", 0)
+    print(f"[suite] evaluating VAULT v3 BF16 master (seg_budget={bud})...", flush=True)
+    results["vault_v3_bf16"], ref_lg = _eval_one(base_model, "block", bud, save_ref=True)
 
     gap = results["swa_only_bf16"]["ce_beyond_2w"] - results["qwen_full_attn_bf16"]["ce_beyond_2w"]
     if gap > 1e-6:
@@ -167,9 +167,9 @@ def eval_long_context_and_quant(
         qsd = vlt3_to_state_dict(vf)
         base_model.load_state_dict(qsd, strict=True)
         base_model.to(device, torch.bfloat16)
-        for blk in base_model.layers:
-            blk.self_attn.vault.float()
-        r, _ = _eval_one(base_model, "block", True, ref_logits=ref_lg)
+        if base_model.seg_scorer is not None:
+            base_model.seg_scorer.float()
+        r, _ = _eval_one(base_model, "block", bud, ref_logits=ref_lg)
         r["file_size_mb"] = round(os.path.getsize(path) / 1e6, 2)
         r["ppl_delta_vs_bf16"] = round(r["ppl_beyond_2w"] - results["vault_v3_bf16"]["ppl_beyond_2w"], 4)
         if gap > 1e-6:
@@ -181,8 +181,8 @@ def eval_long_context_and_quant(
     # Restore BF16 master weights
     base_model.load_state_dict(orig_sd, strict=True)
     base_model.to(device, torch.bfloat16)
-    for blk in base_model.layers:
-        blk.self_attn.vault.float()
+    if base_model.seg_scorer is not None:
+        base_model.seg_scorer.float()
     if vlt3_paths.get("bf16") and os.path.isfile(vlt3_paths["bf16"]):
         results["vault_v3_bf16"]["file_size_mb"] = round(os.path.getsize(vlt3_paths["bf16"]) / 1e6, 2)
     return results
@@ -440,7 +440,8 @@ def bench_c_runtime(host_bin: str, vlt3_paths: Dict[str, str], threads_list=(1, 
 def main():
     ap = argparse.ArgumentParser(description="VAULT v3 complete evaluation & benchmark suite")
     ap.add_argument("--qwen_dir", default=DEFAULT_QWEN)
-    ap.add_argument("--vault_ckpt", default=os.path.join(ROOT, "checkpoints", "vault_v3_stage_a_best.pt"))
+    ap.add_argument("--seg_ckpt", default=os.path.join(ROOT, "dist", "hf_vault_v3", "vault_params", "vault_v3_seg_scorer.pt"))
+    ap.add_argument("--seg_budget", type=int, default=1024)
     ap.add_argument("--bf16_vlt3", default=os.path.join(ROOT, "dist", "vault_v3_1.5b_bf16.vlt3"))
     ap.add_argument("--q8_vlt3", default=os.path.join(ROOT, "dist", "vault_v3_1.5b_q8_0.vlt3"))
     ap.add_argument("--q4_vlt3", default=os.path.join(ROOT, "dist", "vault_v3_1.5b_q4_0.vlt3"))
@@ -453,20 +454,22 @@ def main():
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with open(os.path.join(args.qwen_dir, "config.json")) as f:
         qc = json.load(f)
-    cfg = VAULTv3Config.from_qwen_config(qc, window=1024)
+    cfg = VAULTv3Config.from_qwen_config(
+        qc, window=1024, seg_budget=args.seg_budget, seg_layers=(8, 16, 24) if args.seg_budget > 0 else (),
+    )
     tok = AutoTokenizer.from_pretrained(args.qwen_dir)
 
     model = VAULTv3ForCausalLM(cfg)
     load_qwen2_into_vault(model, args.qwen_dir)
     ckpt_meta = {}
-    if os.path.isfile(args.vault_ckpt):
-        ckpt_meta = load_vault_params(model, args.vault_ckpt)
-        print(f"[*] loaded trained Kenyon Vault weights from {args.vault_ckpt} (step={ckpt_meta.get('step')})", flush=True)
+    if args.seg_ckpt and os.path.isfile(args.seg_ckpt):
+        ckpt_meta = load_vault_params(model, args.seg_ckpt)
+        print(f"[*] loaded trained SegmentScorer v2 weights from {args.seg_ckpt}", flush=True)
     else:
-        print(f"[!] WARNING: {args.vault_ckpt} not found; evaluating untrained Vault!", flush=True)
+        print(f"[!] WARNING: {args.seg_ckpt} not found; evaluating untrained SegmentScorer!", flush=True)
     model = model.to(dev, torch.bfloat16)
-    for blk in model.layers:
-        blk.self_attn.vault.float()
+    if model.seg_scorer is not None:
+        model.seg_scorer.float()
     model.eval()
 
     # Build deterministic held-out long-context evaluation set (seed=999, distinct from Stage A's 777)
@@ -487,9 +490,9 @@ def main():
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "model": "VAULT-v3-1.5B",
         "total_params": sum(p.numel() for p in model.parameters()),
-        "vault_params": sum(p.numel() for p in model.vault_parameters()),
+        "seg_scorer_params": sum(p.numel() for p in model.seg_scorer.parameters()) if model.seg_scorer is not None else 0,
         "total_tensors": len(model.state_dict()),
-        "tensors_per_layer": 17,
+        "tensors_per_layer": 12,
         "checkpoint_meta": {k: v for k, v in ckpt_meta.items() if k in ("step", "eval")},
         "memory_scaling": memory_scaling_table(cfg),
     }

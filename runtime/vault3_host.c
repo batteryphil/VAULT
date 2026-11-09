@@ -399,9 +399,9 @@ int main(int argc, char **argv) {
     double t0 = now_s();
     int rc = v3_load(&m, buf, (uint64_t)st.st_size, verify);
     if (rc != V3_OK) { fprintf(stderr, "v3_load failed: %d\n", rc); return 2; }
-    fprintf(stderr, "[load] %.1f MB, %u layers, d=%u, heads=%u/%u, window=%u, sinks=%u, seg_budget=%u, cells=%u, vocab=%u, fmt=%u (%.2fs%s)\n",
+    fprintf(stderr, "[load] %.1f MB, %u layers, d=%u, heads=%u/%u, window=%u, sinks=%u, seg_budget=%u, vocab=%u, fmt=%u (%.2fs%s)\n",
             st.st_size / 1e6, m.n_layers, m.d_model, m.n_heads, m.n_kv_heads, m.window, m.n_sink, m.seg_budget,
-            m.n_cells, m.vocab_size, m.weight_format, now_s() - t0, verify ? ", CRC+NaN verified" : ", NaN verified");
+            m.vocab_size, m.weight_format, now_s() - t0, verify ? ", CRC+NaN verified" : ", NaN verified");
 
     size_t tok_sz = v3_tok_arena_size(&m);
     if (tok_sz == 0) { fprintf(stderr, "invalid tok arena size\n"); return 1; }
@@ -447,7 +447,7 @@ int main(int argc, char **argv) {
         free(arena); free(tok_arena);
         return 1;
     }
-    s.vault_on = !novault;
+    (void)novault;
     if (noseg) v3_set_seg_budget(&s, 0u);
     else if (seg_override >= 0 && m.seg_n_feat > 0) v3_set_seg_budget(&s, active_seg_budget);
     if (pin_override >= 0) {
